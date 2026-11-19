@@ -47,14 +47,18 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _get_request_path(self):
+        parsed = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(parsed.query)
+        if "path" in qs and qs["path"][0]:
+            p = qs["path"][0]
+            return "/" + p.lstrip("/")
         for h in ["x-forwarded-uri", "x-matched-path", "x-real-path", "x-vercel-original-path"]:
             val = self.headers.get(h)
             if val and not val.endswith("/index.py"):
-                return urllib.parse.urlparse(val).path
-        parsed = urllib.parse.urlparse(self.path).path
-        if parsed == "/api/index.py" or parsed == "/api":
+                return "/" + urllib.parse.urlparse(val).path.lstrip("/")
+        if parsed.path in ["/api/index.py", "/api"]:
             return "/"
-        return parsed
+        return parsed.path
 
     def do_OPTIONS(self):
         self._set_headers(200)
