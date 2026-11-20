@@ -873,7 +873,7 @@
                     <div id="step2ScanningPulse" class="hidden mb-3 p-3.5 bg-white rounded-2xl border-2 border-emerald-600 shadow-md flex items-center justify-between animate-pulse">
                         <div class="flex items-center gap-2.5">
                             <i class="fa-solid fa-circle-notch fa-spin text-emerald-600 text-sm"></i>
-                            <span class="text-xs font-black text-[#0f172a]" id="step2ScanStatusText">Đang rà soát các nhóm lỗi dữ liệu (Format, Ô trống, Trùng lặp, Voucher, COGS)...</span>
+                            <span class="text-xs font-black text-[#0f172a]" id="step2ScanStatusText">Đang rà soát các nhóm lỗi dữ liệu...</span>
                         </div>
                         <span class="text-[10px] font-black px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs">AI SCANNER</span>
                     </div>
@@ -2259,14 +2259,6 @@
         }
         window.renderCleanedOrdersTable = renderCleanedOrdersTable;
 
-        // Khai báo an toàn toàn cục cho bộ tùy chỉnh biểu đồ
-        function populateCustomChartSelectors(data) {
-            if (typeof _populateCustomChartSelectorsInternal === 'function') {
-                return _populateCustomChartSelectorsInternal(data);
-            }
-        }
-        window.populateCustomChartSelectors = populateCustomChartSelectors;
-
         // ===================================================================
         // WORKFLOW CONTROLLER: 5 BƯỚC TIẾN TRÌNH THEO LUỒNG KHOA HỌC
         // ===================================================================
@@ -3132,7 +3124,6 @@
             uploadedFileName = file.name;
             currentScenario = null;
             isDemoMode = false;
-            hasApprovedCleaning = false;
 
             // 1. Hiển thị chức năng quay tròn (Spinner) ngay lập tức
             showUploadLoader(file.name);
@@ -3805,13 +3796,7 @@
             }
 
             // Tự động nạp danh sách Cột Chiều & Cột Chỉ Số vào Bộ Tùy Chỉnh Biểu Đồ Bước 3
-            if (typeof populateCustomChartSelectors === 'function') {
-                try {
-                    populateCustomChartSelectors(data);
-                } catch(e) {
-                    console.warn('populateCustomChartSelectors warning:', e);
-                }
-            }
+            populateCustomChartSelectors(data);
 
             const sideExceptionsBadge = document.getElementById('sideExceptionsBadge');
             if (exceptionsCount > 0) {
@@ -3867,18 +3852,8 @@
                 geminiEl.innerText = data.ai_executive_insights || "Đã phân tích toàn bộ P&L và ngoại lệ từ tệp tải lên.";
             }
 
-            if (typeof populateCustomChartSelectors === 'function') {
-                try {
-                    populateCustomChartSelectors(data);
-                } catch(e) {
-                    console.warn('populateCustomChartSelectors warning:', e);
-                }
-            }
-            try {
-                renderAuditTrail(data.audit_trail || []);
-            } catch(e) {
-                console.warn('renderAuditTrail warning:', e);
-            }
+            populateCustomChartSelectors(data);
+            renderAuditTrail(data.audit_trail || []);
         }
 
         // Render Top Selling Campaigns
@@ -4145,8 +4120,6 @@
 
             const pnl = (lastApiResponse && lastApiResponse.pnl_table) ? lastApiResponse.pnl_table : [];
             const kpis = (lastApiResponse && (lastApiResponse.financial_kpis || lastApiResponse.summary_kpis || lastApiResponse.kpis)) || {};
-            const domain = (lastApiResponse && (lastApiResponse.domain_type || lastApiResponse.dataset_meta?.domain_type)) || 'RETAIL_ORDERS';
-            const isNonFinDomain = ['MANUFACTURING_QUALITY', 'COHORT_RETENTION', 'SALES_FUNNEL'].includes(domain);
 
             const netRev = kpis.total_net_revenue || pnl.reduce((s, r) => s + (r.net_revenue || 0), 0);
             const cm = kpis.total_contribution_margin || pnl.reduce((s, r) => s + (r.contribution_margin || 0), 0);
@@ -4156,7 +4129,7 @@
             const isInvalidData = !lastApiResponse || 
                                   lastApiResponse.status === 'DATASET_INVALID_OR_EMPTY' || 
                                   (lastApiResponse.dataset_validity && lastApiResponse.dataset_validity.is_valid === false) ||
-                                  (!isNonFinDomain && netRev <= 0 && cm <= 0 && (!pnl || pnl.length === 0));
+                                  (netRev <= 0 && cm <= 0 && (!pnl || pnl.length === 0));
 
             if (isInvalidData) {
                 rootGrid.innerHTML = `
@@ -4182,104 +4155,72 @@
                 return;
             }
 
-            // 1. Root Cause Cards - 100% Dynamic Multi-Domain Data-Driven Engine
-            const matrix = (lastApiResponse && (lastApiResponse.problem_solution_matrix || lastApiResponse.root_causes)) || [];
-
-            if (matrix.length > 0) {
-                rootGrid.innerHTML = matrix.map((item, idx) => {
-                    const sev = (item.severity || 'WARNING').toUpperCase();
-                    let bgClass = 'bg-amber-50/60 border-amber-200';
-                    let badgeBg = 'bg-amber-500 text-white';
-                    let iconClass = 'fa-triangle-exclamation text-amber-600';
-                    let titleColor = 'text-amber-950';
-
-                    if (sev === 'CRITICAL' || item.badge_color === 'rose') {
-                        bgClass = 'bg-[#fde2e4]/50 border-[#fad2e1]';
-                        badgeBg = 'bg-rose-600 text-white';
-                        iconClass = 'fa-triangle-exclamation text-rose-600';
-                        titleColor = 'text-rose-950';
-                    } else if (sev === 'OPPORTUNITY' || item.badge_color === 'emerald') {
-                        bgClass = 'bg-emerald-50/70 border-emerald-200';
-                        badgeBg = 'bg-emerald-600 text-white';
-                        iconClass = 'fa-arrow-trend-up text-emerald-600';
-                        titleColor = 'text-emerald-950';
-                    } else if (sev === 'INFO' || item.badge_color === 'teal') {
-                        bgClass = 'bg-[#c5dedd]/30 border-[#c5dedd]';
-                        badgeBg = 'bg-teal-700 text-white';
-                        iconClass = 'fa-circle-info text-teal-700';
-                        titleColor = 'text-[#183634]';
-                    }
-
-                    return `
-                        <div class="p-5 rounded-2xl ${bgClass} border space-y-3 flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between gap-2">
-                                    <span class="text-xs font-black ${titleColor} flex items-center gap-2">
-                                        <i class="fa-solid ${iconClass}"></i>
-                                        <span>${idx + 1}. ${item.title || item.id}</span>
-                                    </span>
-                                    <span class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${badgeBg}">
-                                        ${sev}
-                                    </span>
-                                </div>
-                                <p class="text-xs text-slate-700 leading-relaxed font-medium">
-                                    ${item.problem || ''}
-                                </p>
-                                ${item.evidence ? `
-                                    <div class="text-[11px] text-slate-600 italic bg-white/70 p-2.5 rounded-xl border border-slate-200/60 leading-relaxed">
-                                        <strong class="text-slate-800 not-italic font-bold"><i class="fa-solid fa-chart-simple mr-1 text-slate-400"></i>Bằng chứng định lượng:</strong> ${item.evidence}
-                                    </div>
-                                ` : ''}
-                            </div>
-                            <div class="space-y-2 pt-1 border-t border-slate-200/50">
-                                <div class="text-[11px] text-[#183634] font-semibold bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                                    <span class="text-[10px] font-black uppercase text-rose-700 block mb-1 tracking-wider">
-                                        <i class="fa-solid fa-magnifying-glass-chart mr-1"></i> Nguyên nhân gốc rễ (Root Cause):
-                                    </span>
-                                    <span class="text-slate-800 leading-relaxed">${item.root_cause || item.problem}</span>
-                                </div>
-                                ${item.urgent_solution ? `
-                                    <div class="text-[11px] text-slate-800 font-medium bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80 flex items-start gap-2">
-                                        <i class="fa-solid fa-bolt text-emerald-600 mt-0.5 shrink-0 text-xs"></i>
-                                        <div class="leading-relaxed"><strong class="text-emerald-950 font-bold">Hành động can thiệp tức thời (24h - 48h):</strong> ${item.urgent_solution}</div>
-                                    </div>
-                                ` : ''}
-                                ${item.expected_impact ? `
-                                    <div class="text-[10px] text-teal-800 font-bold bg-[#c5dedd]/30 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
-                                        <i class="fa-solid fa-bullseye text-teal-600"></i>
-                                        <span>Kỳ vọng tác động: ${item.expected_impact}</span>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                rootGrid.innerHTML = `
-                    <div class="col-span-full p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
-                        Chưa ghi nhận bất thường hoặc tổn thất tài chính lớn từ tập dữ liệu hiện tại.
+            // 1. Root Cause Cards
+            rootGrid.innerHTML = `
+                <div class="p-5 rounded-2xl bg-[#fde2e4]/50 border border-[#fad2e1]/70 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-[#872D43] flex items-center gap-2">
+                            <i class="fa-solid fa-tags text-[#fad2e1]"></i> 1. Trượt Giá Sàn & Bào Mòn Do Voucher
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#fad2e1] text-white">RỦI RO CAO</span>
                     </div>
-                `;
-            }
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
+                        Cộng dồn mã chiết khấu không giới hạn cùng voucher sàn làm giảm biên đóng góp thực tế (CM hiện tại: <strong>${formatVND(cm)}</strong>). Các đơn hàng có mức chiết khấu > 25% dẫn đến tình trạng bán âm dòng tiền.
+                    </p>
+                    <div class="text-[11px] text-[#872D43] font-bold bg-white/70 p-2 rounded-xl border border-[#fad2e1]/40">
+                        <i class="fa-solid fa-triangle-exclamation mr-1"></i> Tác động: Cần thiết lập Hard Rule giá sàn trên hệ thống OMS ngay lập tức.
+                    </div>
+                </div>
 
-            // 2. Initialize and render solutions from dataset matrix or recommendations
+                <div class="p-5 rounded-2xl bg-[#fde2e4]/50 border border-[#c5dedd] space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-[#0f172a] font-black text-lg flex items-center gap-2">
+                            <i class="fa-solid fa-truck-fast text-[#c5dedd]"></i> 2. Rủi Ro Vận Hành & Tỷ Lệ Hoàn Huỷ Đơn
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#c5dedd] text-[#183634]">VẬN HÀNH</span>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
+                        Giá trị hàng hoàn huỷ đạt <strong>${formatVND(returns)}</strong>. Phương thức giao COD không qua xác thực tự động khiến tỷ lệ bom hàng và chi phí vận chuyển hai chiều bào mòn lợi nhuận ròng.
+                    </p>
+                    <div class="text-[11px] text-[#183634] font-bold bg-white/70 p-2 rounded-xl border border-[#c5dedd]">
+                        <i class="fa-solid fa-shield-halved mr-1 text-[#c5dedd]"></i> Tác động: Tích hợp API Zalo/SMS xác thực đơn trước khi xuất kho.
+                    </div>
+                </div>
+
+                <div class="p-5 rounded-2xl bg-white border border-[#c5dedd] space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-[#0f172a] font-black text-lg flex items-center gap-2">
+                            <i class="fa-solid fa-bullhorn text-[#c5dedd]"></i> 3. Hiệu Quả Marketing & Kênh Bán Hàng
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#c5dedd] text-[#183634]">PHÂN BỔ</span>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
+                        Tổng chi phí tiếp thị ghi nhận <strong>${formatVND(costs)}</strong>. Phân tích Causal Uplift chỉ ra một số chiến dịch có doanh thu kế toán cao nhưng tăng trưởng hữu cơ (incremental) thấp, chịu phí sàn cao.
+                    </p>
+                    <div class="text-[11px] text-[#183634] font-bold bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <i class="fa-solid fa-arrow-trend-up mr-1 text-[#c5dedd]"></i> Tác động: Chuyển dịch ngân sách sang kênh trực tiếp (Website/D2C).
+                    </div>
+                </div>
+
+                <div class="p-5 rounded-2xl bg-white border border-[#c5dedd] space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-[#0f172a] font-black text-lg flex items-center gap-2">
+                            <i class="fa-solid fa-boxes-packing text-[#fad2e1]"></i> 4. Cơ Cấu Giá Vốn & Giá Trị Đơn (AOV)
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#fad2e1]/40 text-[#872D43]">DANH MỤC</span>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
+                        Cơ cấu sản phẩm phụ kiện biên mỏng chưa được đóng gói thành combo với nhóm hàng chủ lực, dẫn đến chi phí đóng gói cố định chiếm tỷ trọng lớn trên mỗi đơn giá trị nhỏ.
+                    </p>
+                    <div class="text-[11px] text-[#872D43] font-bold bg-[#fde2e4] p-2 rounded-xl border border-[#fad2e1]">
+                        <i class="fa-solid fa-box-open mr-1 text-[#fad2e1]"></i> Tác động: Thiết lập các gói combo tăng giá trị đơn hàng AOV thêm 15%.
+                    </div>
+                </div>
+            `;
+
+            // 2. Initialize and render solutions from dataset recommendations or default domain solutions
             const recs = (lastApiResponse && lastApiResponse.recommendations) || [];
-            if (matrix && matrix.length > 0) {
-                window.currentStep4Solutions = matrix.map((m, idx) => {
-                    const isCritical = m.severity === 'CRITICAL';
-                    const isWarning = m.severity === 'WARNING';
-                    const actions = [m.urgent_solution, m.medium_solution, m.strategic_solution].filter(Boolean);
-                    return {
-                        id: idx + 1,
-                        title: `${m.title} — ${m.urgent_solution ? m.urgent_solution.split('.')[0] : 'Giải Pháp Chiến Lược'}`,
-                        priority: isCritical ? 'Ưu tiên cấp thiết' : (isWarning ? 'Ưu tiên cao' : 'Ưu tiên vừa'),
-                        priorityColor: isCritical ? 'danger' : (isWarning ? 'danger' : 'medium'),
-                        desc: `${m.problem} [Nguyên nhân gốc rễ: ${m.root_cause}]`,
-                        actions: actions.length > 0 ? actions : [m.problem],
-                        metric: m.expected_impact ? `Đo lường: ${m.expected_impact}` : 'Đo lường: Tối ưu hiệu quả tài chính và bảo vệ biên lợi nhuận.'
-                    };
-                });
-            } else if (recs && recs.length > 0) {
+            if (recs && recs.length > 0) {
                 window.currentStep4Solutions = recs.map((r, idx) => {
                     const isDanger = r.decision_badge === 'danger' || (r.decision && r.decision.includes('TÁI CƠ CẤU')) || (r.decision && r.decision.includes('BẢO TRÌ'));
                     const isSuccess = r.decision_badge === 'success' || (r.decision && r.decision.includes('MỞ RỘNG')) || (r.decision && r.decision.includes('ĐẨY MẠNH'));
@@ -4294,7 +4235,35 @@
                     };
                 });
             } else {
-                window.currentStep4Solutions = [];
+                window.currentStep4Solutions = [
+                    {
+                        id: 1,
+                        title: 'Thiết lập rào cản Giá sàn (Price Floor) & Chặn cộng dồn mã chiết khấu',
+                        priority: 'Ưu tiên cấp thiết',
+                        priorityColor: 'danger',
+                        desc: 'Cài đặt Hard Rule trên hệ thống OMS: Giới hạn tổng chiết khấu không vượt 25% giá niêm yết; tự động chặn xuất kho mọi đơn hàng có biên lợi nhuận gộp sau chiết khấu < 10%. Các đơn vi phạm chuyển sang luồng CFO phê duyệt.',
+                        actions: ['Cài đặt Hard Rule trên hệ thống OMS', 'Giới hạn tổng chiết khấu không vượt 25%'],
+                        metric: 'Đo lường: Triệt tiêu 100% đơn bán âm, bảo toàn toàn bộ dòng tiền cho doanh nghiệp.'
+                    },
+                    {
+                        id: 2,
+                        title: 'Chấm điểm rủi ro & Xác thực tự động đơn hàng giao COD',
+                        priority: 'Ưu tiên cao',
+                        priorityColor: 'danger',
+                        desc: 'Tích hợp API tự động gửi tin Zalo ZNS / SMS xác nhận đối với đơn COD trị giá > 2.000.000 đ hoặc tài khoản có tỷ lệ nhận hàng thấp. Nâng cấp quy chuẩn bọc chống sốc 3 lớp có tem niêm phong chống tráo đổi.',
+                        actions: ['Tích hợp API gửi tin Zalo ZNS / SMS xác nhận đơn COD', 'Nâng cấp quy chuẩn bọc chống sốc có tem niêm phong'],
+                        metric: 'Đo lường: Kéo giảm tỷ lệ hoàn huỷ đơn COD, tiết kiệm chi phí đóng gói & vận chuyển logistics.'
+                    },
+                    {
+                        id: 3,
+                        title: 'Theo dõi Doanh thu theo Kênh & Đẩy mạnh Kênh Website trực tiếp',
+                        priority: 'Ưu tiên vừa',
+                        priorityColor: 'medium',
+                        desc: 'Chuyển dịch 20% ngân sách marketing sang thúc đẩy kênh Website trực tiếp (Margin cao không chịu phí sàn). Thiết lập gói combo "Sản phẩm bán chạy + Phụ kiện tồn kho chậm luân chuyển" và voucher 10% cho đơn kế tiếp.',
+                        actions: ['Chuyển dịch 20% ngân sách marketing sang kênh Website trực tiếp', 'Thiết lập gói combo sản phẩm chủ lực + phụ kiện'],
+                        metric: 'Đo lường: Tăng +15% giá trị đơn hàng trung bình (AOV), nâng tỷ trọng kênh Website.'
+                    }
+                ];
             }
             renderStep4SolutionsFromState();
         }
@@ -4506,18 +4475,196 @@
             const kpis = (data && (data.financial_kpis || data.summary_kpis || data.kpis)) || {};
             const domainAngles = (data && data.domain_analysis_angles) ? data.domain_analysis_angles : [];
 
-            // Đồng bộ 100% với Bước 3: dùng chung bộ biểu đồ đã được làm sạch (sanitized)
-            const sharedSpecs = buildAnalysisChartSpecs(data);
-            window.currentAnalysisChartSpecs = sharedSpecs;
-            const chartsToRender = sharedSpecs.map(spec => ({
-                id: `step5_${spec.id}`,
-                title: spec.title,
-                subtitle: spec.subtitle || '',
-                unit: spec.badge || '',
-                type: spec.config.type,
-                data: spec.config.data,
-                options: spec.config.options
-            }));
+            const chartsToRender = [];
+
+            // 1. If Domain Analysis Angles exist (e.g. SaaS, Manufacturing, Cohort, Store P&L, Funnel)
+            if (domainAngles && domainAngles.length > 0) {
+                domainAngles.forEach((angle, idx) => {
+                    if (angle.labels && angle.labels.length > 0 && angle.datasets && angle.datasets.length > 0) {
+                        const hasRealData = angle.datasets.some(ds => ds.data && ds.data.some(v => v !== null && v !== undefined && v !== 0));
+                        if (hasRealData) {
+                            chartsToRender.push({
+                                id: `step5_domain_${idx}_${(angle.id || 'angle').toLowerCase()}`,
+                                title: angle.title || angle.name,
+                                subtitle: angle.subtitle || '',
+                                unit: angle.unit ? `Đơn vị: ${angle.unit}` : '',
+                                type: angle.chartType || 'bar',
+                                data: {
+                                    labels: angle.labels,
+                                    datasets: angle.datasets.map(ds => ({
+                                        ...ds,
+                                        borderWidth: ds.borderWidth || 1.5,
+                                        borderRadius: (angle.chartType === 'bar' || !angle.chartType) ? 6 : undefined
+                                    }))
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } }
+                                    },
+                                    scales: (angle.chartType === 'doughnut' || angle.chartType === 'pie') ? {} : {
+                                        x: { grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9, weight: 'bold' } } },
+                                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v.toLocaleString('vi-VN') + (angle.unit ? ' ' + angle.unit : '') } }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+
+            // 2. Standard E-commerce charts (ONLY IF THEY HAVE REAL DATA)
+            // A. Omnichannel: only if channels has real items with positive net_revenue
+            const validChannels = channels.filter(c => c.channel && c.channel !== '--' && c.channel !== 'Khác' && (Number(c.net_revenue) || 0) > 0);
+            if (validChannels.length > 0 && !chartsToRender.some(c => c.title.toLowerCase().includes('kênh'))) {
+                chartsToRender.push({
+                    id: 'step5_chart_omnichannel',
+                    title: 'Đối Soát Hiệu Quả Đa Kênh (Omnichannel)',
+                    subtitle: 'Doanh thu thuần và hàng hoàn theo từng kênh bán hàng',
+                    unit: 'Đơn vị: Triệu VNĐ',
+                    type: 'bar',
+                    data: {
+                        labels: validChannels.map(c => c.channel),
+                        datasets: [
+                            { label: 'DT Gộp (Tr. đ)', data: validChannels.map(c => (Number(c.gross_revenue) || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 },
+                            { label: 'Hàng Hoàn (Tr. đ)', data: validChannels.map(c => (Number(c.return_amount) || 0) / 1e6), backgroundColor: '#f4978e', borderColor: '#e11d48', borderWidth: 1.5, borderRadius: 6 },
+                            { label: 'DT Thuần (Tr. đ)', data: validChannels.map(c => (Number(c.net_revenue) || 0) / 1e6), backgroundColor: '#72efdd', borderColor: '#0d9488', borderWidth: 1.5, borderRadius: 6 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } },
+                            y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' } }
+                        }
+                    }
+                });
+            }
+
+            // B. Products Pareto: only if valid products with revenue > 0
+            const validProducts = products.filter(p => p.product_id && !p.product_id.includes('Không có') && !p.product_id.includes('--') && ((Number(p.gross_revenue) || Number(p.gross_amount) || 0) > 0)).slice(0, 6);
+            if (validProducts.length > 0 && !chartsToRender.some(c => c.title.toLowerCase().includes('sản phẩm'))) {
+                chartsToRender.push({
+                    id: 'step5_chart_products',
+                    title: 'Cơ Cấu Sản Phẩm Bán Chạy (Pareto 80/20)',
+                    subtitle: 'Top sản phẩm đóng góp doanh số và lợi nhuận cao nhất',
+                    unit: 'Đơn vị: Triệu VNĐ',
+                    type: 'bar',
+                    data: {
+                        labels: validProducts.map(p => (p.product_name ? `${p.product_id} - ${p.product_name}` : p.product_id)),
+                        datasets: [
+                            { label: 'Doanh Thu Gộp (Tr. đ)', data: validProducts.map(p => (Number(p.gross_revenue) || Number(p.gross_amount) || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 },
+                            { label: 'Lợi Nhuận Gộp (Tr. đ)', data: validProducts.map(p => (Number(p.gross_profit) || 0) / 1e6), backgroundColor: '#fed9b7', borderColor: '#d97706', borderWidth: 1.5, borderRadius: 6 }
+                        ]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                        scales: {
+                            x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' } },
+                            y: { grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } }
+                        }
+                    }
+                });
+            }
+
+            // C. Timeline: only if timeline has >= 2 data points
+            const validTimeline = (timeline || []).filter(t => t.date && t.date !== '--' && (Number(t.net_revenue) || 0) > 0);
+            if (validTimeline.length >= 2 && !chartsToRender.some(c => c.title.toLowerCase().includes('thời gian') || c.title.toLowerCase().includes('daily'))) {
+                chartsToRender.push({
+                    id: 'step5_chart_timeline',
+                    title: 'Diễn Biến Doanh Thu Theo Thời Gian (Daily Trend)',
+                    subtitle: 'Xu hướng doanh thu thuần và lượng đơn qua các chu kỳ',
+                    unit: 'DT Thuần & Đơn Hàng',
+                    type: 'line',
+                    data: {
+                        labels: validTimeline.map(t => t.date || t.period),
+                        datasets: [
+                            { label: 'DT Thuần (Tr. đ)', data: validTimeline.map(t => (Number(t.net_revenue) || 0) / 1e6), borderColor: '#0284c7', backgroundColor: 'rgba(160, 196, 255, 0.35)', borderWidth: 2.5, fill: true, tension: 0.35, pointRadius: 4, yAxisID: 'y' },
+                            { label: 'Số Đơn Hàng', data: validTimeline.map(t => Number(t.orders_count) || 0), borderColor: '#e11d48', backgroundColor: 'rgba(244, 151, 142, 0.35)', borderWidth: 2, borderDash: [3, 3], pointRadius: 3, yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 } } },
+                            y: { position: 'left', beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' } },
+                            y1: { position: 'right', beginAtZero: true, grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, stepSize: 1 } }
+                        }
+                    }
+                });
+            }
+
+            // D. Campaigns P&L: only if pnl has actual campaigns
+            const validCamps = (pnl || []).filter(c => c.campaign_id && c.campaign_id !== 'ORGANIC' && (Number(c.net_revenue) || 0) > 0);
+            if (validCamps.length > 0 && !chartsToRender.some(c => c.title.toLowerCase().includes('chiến dịch'))) {
+                chartsToRender.push({
+                    id: 'step5_chart_campaigns',
+                    title: 'Hiệu Quả P&L & Biên CM Từng Chiến Dịch',
+                    subtitle: 'So sánh doanh thu thuần và biên đóng góp của từng chiến dịch',
+                    unit: 'Sales Wave & CM',
+                    type: 'line',
+                    data: {
+                        labels: validCamps.map(c => c.campaign_name || c.campaign_id),
+                        datasets: [
+                            { label: 'DT Thuần (Tr. đ)', data: validCamps.map(c => (Number(c.net_revenue) || 0) / 1e6), borderColor: '#0d9488', backgroundColor: 'rgba(114, 239, 221, 0.35)', borderWidth: 2.5, fill: true, tension: 0.35, pointRadius: 4 },
+                            { label: 'Biên CM (Tr. đ)', data: validCamps.map(c => (Number(c.contribution_margin) || 0) / 1e6), borderColor: '#d97706', backgroundColor: 'rgba(254, 217, 183, 0.45)', borderWidth: 2.5, fill: true, tension: 0.35, pointRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } },
+                            y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' } }
+                        }
+                    }
+                });
+            }
+
+            // E. Cost structure: only if total costs exist
+            const rawCogs = Number(kpis.total_cogs || 0);
+            const rawTotalCost = Number(kpis.total_campaign_costs || 0);
+            if ((rawCogs + rawTotalCost) > 0 && !chartsToRender.some(c => c.title.toLowerCase().includes('cơ cấu chi phí'))) {
+                const rawDisc = Number(kpis.total_discount_amount || 0);
+                const rawMkt = Math.max(0, rawTotalCost - rawDisc);
+                const rawCm = Math.max(0, Number(kpis.total_contribution_margin || 0));
+
+                const cogsVal = Math.round((rawCogs / 1e6) * 100) / 100;
+                const discVal = Math.round((rawDisc / 1e6) * 100) / 100;
+                const mktVal = Math.round((rawMkt / 1e6) * 100) / 100;
+                const cmVal = Math.round((rawCm / 1e6) * 100) / 100;
+
+                chartsToRender.push({
+                    id: 'step5_chart_cost_structure',
+                    title: 'Cơ Cấu Chi Phí & Dòng Chảy Lợi Nhuận (Cost Breakdown)',
+                    subtitle: 'Tỷ trọng phân bổ dòng tiền giữa giá vốn, tiếp thị và biên đóng góp',
+                    unit: 'Tỷ trọng %',
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Giá Vốn COGS', 'Chiết Khấu Voucher', 'CP Marketing & Vận Hành', 'Biên Đóng Góp (CM)'],
+                        datasets: [{
+                            data: [cogsVal, discVal, mktVal, cmVal],
+                            backgroundColor: ['#a0c4ff', '#f4978e', '#fed9b7', '#72efdd'],
+                            borderColor: ['#0284c7', '#e11d48', '#d97706', '#0d9488'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } }
+                    }
+                });
+            }
 
             // Render into DOM
             if (chartsToRender.length === 0) {
@@ -4547,11 +4694,11 @@
                     const canvas = document.getElementById(spec.id);
                     if (canvas) {
                         try {
-                            step5Charts[spec.id] = new Chart(canvas, cloneChartConfig({
+                            step5Charts[spec.id] = new Chart(canvas, {
                                 type: spec.type,
                                 data: spec.data,
                                 options: spec.options
-                            }));
+                            });
                         } catch (err) {
                             console.error(`Lỗi render chart ${spec.id}:`, err);
                         }
@@ -5040,9 +5187,17 @@
 
         let activeDynamicChartInstances = [];
 
-        function buildAnalysisChartSpecs(data) {
-            if (!data) return [];
-            const specs = [];
+        function renderDynamicAiCharts(data) {
+            if (!data) return;
+
+            // 1. Destroy previous chart instances
+            activeDynamicChartInstances.forEach(chart => {
+                try { if (chart) chart.destroy(); } catch(e) {}
+            });
+            activeDynamicChartInstances = [];
+
+            const multiContainer = document.getElementById('multiChartOverviewContainer');
+            if (!multiContainer) return;
 
             // 2. Discover all populated, valid angles from dataset
             const activeAngles = [];
@@ -5163,356 +5318,6 @@
                 });
             }
 
-            // 6. Draw Charts for each active angle
-            activeAngles.forEach(a => {
-                let config = null;
-                if (a.type === 'channel') {
-                    const hasReturns = channels.some(c => (Number(c.return_amount) || 0) > 0.0001);
-                    const hasGrossDiff = channels.some(c => Math.abs((Number(c.gross_revenue) || 0) - (Number(c.net_revenue) || 0)) > 1.0);
-                    const chDatasets = [];
-                    if (hasReturns) {
-                        chDatasets.push({ label: 'Doanh Thu Gộp (Tr. đ)', data: channels.map(c => (c.gross_revenue || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 });
-                        chDatasets.push({ label: 'Hàng Hoàn (Tr. đ)', data: channels.map(c => (c.return_amount || 0) / 1e6), backgroundColor: '#f4978e', borderColor: '#e11d48', borderWidth: 1.5, borderRadius: 6 });
-                        chDatasets.push({ label: 'Doanh Thu Thuần (Tr. đ)', data: channels.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#72efdd', borderColor: '#0d9488', borderWidth: 1.5, borderRadius: 6 });
-                    } else if (hasGrossDiff) {
-                        chDatasets.push({ label: 'Doanh Thu Gộp (Tr. đ)', data: channels.map(c => (c.gross_revenue || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 });
-                        chDatasets.push({ label: 'Doanh Thu Thuần (Tr. đ)', data: channels.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#72efdd', borderColor: '#0d9488', borderWidth: 1.5, borderRadius: 6 });
-                    } else {
-                        chDatasets.push({ label: 'Doanh Thu Thuần (Tr. đ)', data: channels.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#72efdd', borderColor: '#0d9488', borderWidth: 1.5, borderRadius: 6 });
-                    }
-                    config = ({
-                        type: 'bar',
-                        data: {
-                            labels: channels.map(c => c.channel),
-                            datasets: chDatasets
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
-                            scales: {
-                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
-                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'product') {
-                    const topProds = products.slice(0, 6);
-                    config = ({
-                        type: 'bar',
-                        data: {
-                            labels: topProds.map(p => (p.quantity_sold != null ? `${p.product_name || p.product_id} (${p.quantity_sold} SP)` : (p.product_name || p.product_id))),
-                            datasets: [
-                                { label: 'Doanh Thu Gộp (Tr. đ)', data: topProds.map(p => (p.gross_revenue || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 },
-                                { label: 'Lợi Nhuận Gộp (Tr. đ)', data: topProds.map(p => (p.gross_profit || 0) / 1e6), backgroundColor: '#fed9b7', borderColor: '#d97706', borderWidth: 1.5, borderRadius: 6 }
-                            ]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
-                            scales: {
-                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } },
-                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'region') {
-                    config = ({
-                        type: 'doughnut',
-                        data: {
-                            labels: regions.map(r => `${r.region} (${r.revenue_share_pct}%)`),
-                            datasets: [{
-                                data: regions.map(r => (r.net_revenue || 0) / 1e6),
-                                backgroundColor: ['#72efdd', '#f4978e', '#a0c4ff', '#fed9b7', '#d8b4e2', '#80ed99'],
-                                borderColor: ['#0d9488', '#e11d48', '#0284c7', '#d97706', '#9333ea', '#059669'],
-                                borderWidth: 2,
-                                borderColor: '#ffffff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'timeline') {
-                    config = ({
-                        type: 'line',
-                        data: {
-                            labels: timeline.map(t => t.date),
-                            datasets: [
-                                {
-                                    label: 'Doanh Thu Thuần (Tr. đ)',
-                                    data: timeline.map(t => (t.net_revenue || 0) / 1e6),
-                                    borderColor: '#c5dedd',
-                                    backgroundColor: 'rgba(117, 191, 178, 0.35)',
-                                    borderWidth: 2.5,
-                                    fill: true,
-                                    tension: 0.35,
-                                    pointRadius: 3,
-                                    pointBackgroundColor: '#dceeed',
-                                    yAxisID: 'y'
-                                },
-                                {
-                                    label: 'Số Lượng Đơn',
-                                    data: timeline.map(t => t.orders_count || 0),
-                                    borderColor: '#fad2e1',
-                                    backgroundColor: 'rgba(217, 145, 164, 0.45)',
-                                    borderWidth: 2,
-                                    borderDash: [3, 3],
-                                    pointRadius: 3,
-                                    pointBackgroundColor: '#fad2e1',
-                                    yAxisID: 'y1'
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
-                            scales: {
-                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 } }, grid: { display: false } },
-                                y: { position: 'left', ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } },
-                                y1: { position: 'right', ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, stepSize: 1 }, grid: { display: false } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'campaign') {
-                    config = ({
-                        type: 'line',
-                        data: {
-                            labels: campaigns.map(x => x.campaign_name),
-                            datasets: [
-                                {
-                                    label: 'Doanh Thu Thuần (Tr. đ)',
-                                    data: campaigns.map(x => (x.net_revenue || 0) / 1e6),
-                                    borderColor: '#c5dedd',
-                                    backgroundColor: 'rgba(117, 191, 178, 0.35)',
-                                    borderWidth: 2.5,
-                                    fill: true,
-                                    tension: 0.35,
-                                    pointRadius: 4,
-                                    pointBackgroundColor: '#dceeed'
-                                },
-                                {
-                                    label: 'Biên Đóng Góp CM (Tr. đ)',
-                                    data: campaigns.map(x => (x.contribution_margin || 0) / 1e6),
-                                    borderColor: '#fad2e1',
-                                    backgroundColor: 'rgba(217, 145, 164, 0.45)',
-                                    borderWidth: 2.5,
-                                    fill: true,
-                                    tension: 0.35,
-                                    pointRadius: 4,
-                                    pointBackgroundColor: '#fad2e1'
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
-                            scales: {
-                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
-                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'cost') {
-                    const costLabels = [];
-                    const costVals = [];
-                    const costColors = [];
-
-                    if (kpis.total_cogs > 0) {
-                        costLabels.push('Giá Vốn (COGS)');
-                        costVals.push(kpis.total_cogs / 1e6);
-                        costColors.push('#fad2e1');
-                    }
-                    if (kpis.total_discount_amount > 0) {
-                        costLabels.push('Chiết Khấu Voucher');
-                        costVals.push(kpis.total_discount_amount / 1e6);
-                        costColors.push('#f4978e');
-                    }
-                    if (kpis.total_campaign_costs > 0) {
-                        costLabels.push('Chi Phí Marketing');
-                        costVals.push(kpis.total_campaign_costs / 1e6);
-                        costColors.push('#c5dedd');
-                    }
-                    if (kpis.total_contribution_margin > 0) {
-                        costLabels.push('Biên Đóng Góp (CM)');
-                        costVals.push(kpis.total_contribution_margin / 1e6);
-                        costColors.push('#75BFB2');
-                    }
-
-                    config = ({
-                        type: 'doughnut',
-                        data: {
-                            labels: costLabels,
-                            datasets: [{
-                                data: costVals,
-                                backgroundColor: costColors,
-                                borderWidth: 2,
-                                borderColor: '#ffffff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'category') {
-                    config = ({
-                        type: 'bar',
-                        data: {
-                            labels: categories.map(c => c.category),
-                            datasets: [
-                                { label: 'Doanh Thu Thuần (Tr. đ)', data: categories.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#c5dedd', borderRadius: 6 }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
-                            scales: {
-                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
-                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
-                            }
-                        }
-                    });
-                } else if (a.type === 'domain' || a.datasets) {
-                    const isDoughnut = a.chartType === 'doughnut' || a.chartType === 'pie';
-                    config = ({
-                        type: a.chartType || 'bar',
-                        data: {
-                            labels: a.labels || [],
-                            datasets: a.datasets || []
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } }
-                            },
-                            scales: isDoughnut ? {} : {
-                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
-                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' ' + (a.unit || '') }, grid: { color: '#f1f5f9' } }
-                            }
-                        }
-                    });
-                }
-
-                if (config) {
-                    const safe = sanitizeChartConfig(config);
-                    if (safe) specs.push({ ...a, config: safe });
-                }
-            });
-            return specs;
-        }
-
-
-        // ===================================================================
-        // CHART CONSISTENCY ENGINE: legend chỉ hiển thị những chuỗi số liệu có thật
-        // - Bar/Line: loại bỏ dataset toàn 0 / rỗng (vd. "Hàng Hoàn" = 0 ở mọi kênh)
-        // - Doughnut/Pie: loại bỏ lát cắt có giá trị <= 0 (vd. Voucher = 0, MKT = 0)
-        // ===================================================================
-        function _chartVal(v) {
-            if (v === null || v === undefined || v === '') return NaN;
-            if (typeof v === 'object') return Number(v.y ?? v.r ?? v.x ?? NaN);
-            return Number(v);
-        }
-
-        function cloneChartConfig(obj) {
-            if (Array.isArray(obj)) return obj.map(cloneChartConfig);
-            if (obj && typeof obj === 'object' && !(obj instanceof Date)) {
-                const out = {};
-                Object.keys(obj).forEach(k => { out[k] = cloneChartConfig(obj[k]); });
-                return out;
-            }
-            return obj; // primitives & functions (callbacks) giữ nguyên
-        }
-
-        function sanitizeChartConfig(cfg) {
-            if (!cfg || !cfg.data) return null;
-            const c = cloneChartConfig(cfg);
-            const type = c.type || 'bar';
-            const labels = Array.isArray(c.data.labels) ? c.data.labels : [];
-            let datasets = Array.isArray(c.data.datasets) ? c.data.datasets : [];
-            if (labels.length === 0 || datasets.length === 0) return null;
-
-            if (['doughnut', 'pie', 'polarArea'].includes(type)) {
-                const ds0 = datasets[0];
-                const vals = (ds0.data || []).map(_chartVal);
-                const keep = vals.map((v, i) => i < labels.length && isFinite(v) && v > 0);
-                const keptIdx = keep.map((k, i) => k ? i : -1).filter(i => i >= 0);
-                if (keptIdx.length < 2) return null;
-                c.data.labels = keptIdx.map(i => labels[i]);
-                c.data.datasets = datasets.map(ds => {
-                    const nd = { ...ds, data: keptIdx.map(i => (ds.data || [])[i]) };
-                    ['backgroundColor', 'borderColor', 'hoverBackgroundColor', 'hoverBorderColor'].forEach(p => {
-                        if (Array.isArray(ds[p])) nd[p] = keptIdx.map(i => ds[p][i % ds[p].length]);
-                    });
-                    return nd;
-                });
-                return c;
-            }
-
-            if (type === 'line') {
-                // Với biểu đồ đường: Một dataset phải có ít nhất 2 điểm số liệu hợp lệ thì mới vẽ được đường!
-                // Dataset chỉ có 1 điểm hoặc toàn null/NaN thì Chart.js không vẽ được line -> loại bỏ để tránh ghi chú có mà đường không có!
-                datasets = datasets.filter(ds => {
-                    const validPoints = (ds.data || []).filter(v => {
-                        const n = _chartVal(v);
-                        return isFinite(n);
-                    });
-                    return validPoints.length >= 2;
-                });
-                if (datasets.length === 0) return null;
-
-                // Đồng thời phân biệt pointStyle và borderDash nếu có nhiều dataset để các đường không bị đè màu lên nhau
-                const pointStyles = ['circle', 'triangle', 'rectRounded', 'diamond', 'star', 'crossRot'];
-                const dashStyles = [[], [6, 4], [3, 3], [8, 3, 2, 3], [2, 2], [5, 5]];
-                datasets.forEach((ds, idx) => {
-                    if (!ds.pointStyle) ds.pointStyle = pointStyles[idx % pointStyles.length];
-                    if (ds.pointRadius === undefined) ds.pointRadius = 5;
-                    if (ds.pointHoverRadius === undefined) ds.pointHoverRadius = 8;
-                    if (ds.borderWidth === undefined) ds.borderWidth = 2.5;
-                    if (ds.borderDash === undefined && datasets.length > 1) ds.borderDash = dashStyles[idx % dashStyles.length];
-                    ds.spanGaps = false;
-                });
-            } else {
-                datasets = datasets.filter(ds => (ds.data || []).some(v => { const n = _chartVal(v); return isFinite(n) && Math.abs(n) > 0.0001; }));
-                if (datasets.length === 0) return null;
-            }
-            c.data.datasets = datasets;
-            // Ẩn trục phụ y1 nếu không còn dataset nào dùng
-            if (c.options && c.options.scales && c.options.scales.y1 && !datasets.some(ds => ds.yAxisID === 'y1')) {
-                delete c.options.scales.y1;
-            }
-            return c;
-        }
-
-        function renderDynamicAiCharts(data) {
-            if (!data) return;
-
-            // 1. Destroy previous chart instances
-            activeDynamicChartInstances.forEach(chart => {
-                try { if (chart) chart.destroy(); } catch(e) {}
-            });
-            activeDynamicChartInstances = [];
-
-            const multiContainer = document.getElementById('multiChartOverviewContainer');
-            if (!multiContainer) return;
-
-            // 2. Build sanitized chart specs (same source of truth used by Step 5 & Export)
-            const activeAngles = buildAnalysisChartSpecs(data);
-            window.currentAnalysisChartSpecs = activeAngles;
-
             // 3. Update Dynamic Tabs in Header
             const tabsContainer = document.getElementById('analysisAngleTabs');
             if (tabsContainer) {
@@ -5574,16 +5379,247 @@
                 </div>
             `).join('');
 
-
             // 6. Draw Charts for each active angle
             activeAngles.forEach(a => {
                 const canvas = document.getElementById(`dynChartCanvas_${a.id}`);
                 if (!canvas) return;
-                try {
-                    const chart = new Chart(canvas.getContext('2d'), cloneChartConfig(a.config));
+                const ctx = canvas.getContext('2d');
+
+                let chart = null;
+                if (a.type === 'channel') {
+                    chart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: channels.map(c => c.channel),
+                            datasets: [
+                                { label: 'Doanh Thu Gộp (Tr. đ)', data: channels.map(c => (c.gross_revenue || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 },
+                                { label: 'Hàng Hoàn (Tr. đ)', data: channels.map(c => (c.return_amount || 0) / 1e6), backgroundColor: '#f4978e', borderColor: '#e11d48', borderWidth: 1.5, borderRadius: 6 },
+                                { label: 'Doanh Thu Thuần (Tr. đ)', data: channels.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#72efdd', borderColor: '#0d9488', borderWidth: 1.5, borderRadius: 6 }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                            scales: {
+                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
+                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'product') {
+                    const topProds = products.slice(0, 6);
+                    chart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: topProds.map(p => `${p.product_id} (${p.quantity_sold} SP)`),
+                            datasets: [
+                                { label: 'Doanh Thu Gộp (Tr. đ)', data: topProds.map(p => (p.gross_revenue || 0) / 1e6), backgroundColor: '#a0c4ff', borderColor: '#0284c7', borderWidth: 1.5, borderRadius: 6 },
+                                { label: 'Lợi Nhuận Gộp (Tr. đ)', data: topProds.map(p => (p.gross_profit || 0) / 1e6), backgroundColor: '#fed9b7', borderColor: '#d97706', borderWidth: 1.5, borderRadius: 6 }
+                            ]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                            scales: {
+                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } },
+                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'region') {
+                    chart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: regions.map(r => `${r.region} (${r.revenue_share_pct}%)`),
+                            datasets: [{
+                                data: regions.map(r => (r.net_revenue || 0) / 1e6),
+                                backgroundColor: ['#72efdd', '#f4978e', '#a0c4ff', '#fed9b7', '#d8b4e2', '#80ed99'],
+                                borderColor: ['#0d9488', '#e11d48', '#0284c7', '#d97706', '#9333ea', '#059669'],
+                                borderWidth: 2,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'timeline') {
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: timeline.map(t => t.date),
+                            datasets: [
+                                {
+                                    label: 'Doanh Thu Thuần (Tr. đ)',
+                                    data: timeline.map(t => (t.net_revenue || 0) / 1e6),
+                                    borderColor: '#c5dedd',
+                                    backgroundColor: 'rgba(117, 191, 178, 0.35)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointBackgroundColor: '#dceeed',
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    label: 'Số Lượng Đơn',
+                                    data: timeline.map(t => t.orders_count || 0),
+                                    borderColor: '#fad2e1',
+                                    backgroundColor: 'rgba(217, 145, 164, 0.45)',
+                                    borderWidth: 2,
+                                    borderDash: [3, 3],
+                                    pointRadius: 3,
+                                    pointBackgroundColor: '#fad2e1',
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                            scales: {
+                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 } }, grid: { display: false } },
+                                y: { position: 'left', ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } },
+                                y1: { position: 'right', ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, stepSize: 1 }, grid: { display: false } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'campaign') {
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: campaigns.map(x => x.campaign_name),
+                            datasets: [
+                                {
+                                    label: 'Doanh Thu Thuần (Tr. đ)',
+                                    data: campaigns.map(x => (x.net_revenue || 0) / 1e6),
+                                    borderColor: '#c5dedd',
+                                    backgroundColor: 'rgba(117, 191, 178, 0.35)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 4,
+                                    pointBackgroundColor: '#dceeed'
+                                },
+                                {
+                                    label: 'Biên Đóng Góp CM (Tr. đ)',
+                                    data: campaigns.map(x => (x.contribution_margin || 0) / 1e6),
+                                    borderColor: '#fad2e1',
+                                    backgroundColor: 'rgba(217, 145, 164, 0.45)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 4,
+                                    pointBackgroundColor: '#fad2e1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                            scales: {
+                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
+                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'cost') {
+                    const costLabels = [];
+                    const costVals = [];
+                    const costColors = [];
+
+                    if (kpis.total_cogs > 0) {
+                        costLabels.push('Giá Vốn (COGS)');
+                        costVals.push(kpis.total_cogs / 1e6);
+                        costColors.push('#fad2e1');
+                    }
+                    if (kpis.total_discount_amount > 0) {
+                        costLabels.push('Chiết Khấu Voucher');
+                        costVals.push(kpis.total_discount_amount / 1e6);
+                        costColors.push('#fad2e1');
+                    }
+                    if (kpis.total_campaign_costs > 0) {
+                        costLabels.push('Chi Phí Marketing');
+                        costVals.push(kpis.total_campaign_costs / 1e6);
+                        costColors.push('#c5dedd');
+                    }
+                    if (kpis.total_contribution_margin > 0) {
+                        costLabels.push('Biên Đóng Góp (CM)');
+                        costVals.push(kpis.total_contribution_margin / 1e6);
+                        costColors.push('#75BFB2');
+                    }
+
+                    chart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: costLabels,
+                            datasets: [{
+                                data: costVals,
+                                backgroundColor: costColors,
+                                borderWidth: 2,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'category') {
+                    chart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: categories.map(c => c.category),
+                            datasets: [
+                                { label: 'Doanh Thu Thuần (Tr. đ)', data: categories.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#c5dedd', borderRadius: 6 }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } } },
+                            scales: {
+                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
+                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
+                            }
+                        }
+                    });
+                } else if (a.type === 'domain' || a.datasets) {
+                    const isDoughnut = a.chartType === 'doughnut' || a.chartType === 'pie';
+                    chart = new Chart(ctx, {
+                        type: a.chartType || 'bar',
+                        data: {
+                            labels: a.labels || [],
+                            datasets: a.datasets || []
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'top', labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } } }
+                            },
+                            scales: isDoughnut ? {} : {
+                                x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
+                                y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' ' + (a.unit || '') }, grid: { color: '#f1f5f9' } }
+                            }
+                        }
+                    });
+                }
+
+                if (chart) {
                     activeDynamicChartInstances.push(chart);
-                } catch (err) {
-                    console.error('Lỗi vẽ biểu đồ', a.id, err);
                 }
             });
         }
@@ -7121,4 +7157,1872 @@
                 }
             }
 
-... [truncated for diff preview]
+            currentHumanOverrides = { ...currentHumanOverrides, ...overrides };
+            return overrides;
+        }
+
+        function getDynamicOverheadMethod() {
+            const el = document.getElementById('hitlOverheadMethod');
+            return el ? el.value : 'REVENUE_SHARE';
+        }
+
+        function getDynamicMultiTouchRule() {
+            return 'PROPORTIONAL';
+        }
+
+        async function applyHumanControlOverrides() {
+            showToast('✨ Đã ghi nhận tùy chọn can thiệp! Đang tính toán lại báo cáo P&L theo thông số mới...', 'info');
+            const overrides = getDynamicHumanOverrides();
+            const overheadMethod = getDynamicOverheadMethod();
+            await fetchBackendPipeline({
+                human_overrides: overrides,
+                overhead_method: overheadMethod
+            });
+            showToast('✅ Báo cáo P&L đã được tính toán lại thành công theo các tùy chọn can thiệp của bạn!', 'success');
+        }
+
+        let currentCleanedRecords = [];
+        let isShowAllCleanedRows = false;
+
+        // Render Cleaned Data Preview Table (Show 50 rows by default, expandable with Show button)
+        function renderCleanedDataTable(records) {
+            window.renderCleanedOrdersTable = renderCleanedDataTable;
+            const tbody = document.getElementById('cleanedDataTableBody');
+            const countBadge = document.getElementById('badgeCleanedRecordsCount');
+            const paginationBar = document.getElementById('cleanedDataPaginationBar');
+            const showingCountEl = document.getElementById('showingRowCount');
+            const totalCountEl = document.getElementById('totalRowCount');
+            const btnToggle = document.getElementById('btnToggleShowAllCleaned');
+            if (!tbody) return;
+
+            if (records !== undefined) {
+                currentCleanedRecords = records || [];
+                isShowAllCleanedRows = false;
+            }
+
+            const data = currentCleanedRecords || [];
+
+            if (!data || !data.length) {
+                if (countBadge) countBadge.innerText = "0 Bản Ghi";
+                if (paginationBar) paginationBar.classList.add('hidden');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="20" class="py-10 text-center text-slate-400 italic font-medium">
+                            <i class="fa-solid fa-file-excel text-2xl text-slate-300 block mb-2"></i>
+                            Chưa có dữ liệu làm sạch. Tải tệp ở Bước 1 để hiển thị dữ liệu mới tại đây.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const totalRows = data.length;
+            if (countBadge) {
+                countBadge.innerText = `${totalRows} Dòng Dữ Liệu Đã Làm Sạch`;
+            }
+
+            // 1. Determine exact display columns from original file
+            let displayCols = (lastApiResponse && lastApiResponse.dataset_meta && lastApiResponse.dataset_meta.original_columns) || [];
+            
+            // If original_columns not found, dynamically extract from first record excluding system internal keys
+            if (!displayCols || !displayCols.length) {
+                const sysInternalKeys = new Set([
+                    'stt', 'cleaning_status', 'attribution_note', 'attributed_gross', 
+                    'attributed_net_rev', 'attributed_return', 'attributed_cogs', 
+                    'attributed_discount', 'unit_cogs', 'total_cogs', 'gross_profit', 
+                    'contribution_margin', 'gross_amount_normalized', 'cogs_normalized'
+                ]);
+                displayCols = Object.keys(data[0]).filter(k => !sysInternalKeys.has(k));
+            }
+
+            // 2. Render dynamic <thead>
+            const tableEl = document.getElementById('cleanedDataTable') || (tbody ? tbody.closest('table') : null);
+            let theadEl = tableEl ? tableEl.querySelector('thead') : null;
+            if (theadEl && displayCols.length > 0) {
+                theadEl.innerHTML = `
+                    <tr class="bg-slate-50/80 text-slate-700 font-extrabold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                        <th class="py-3 px-3.5 text-center font-bold">STT</th>
+                        ${displayCols.map(col => `<th class="py-3 px-3.5 font-bold">${col}</th>`).join('')}
+                        <th class="py-3 px-3.5 text-center font-bold">Trạng Thái</th>
+                    </tr>
+                `;
+            }
+
+            const displayRows = isShowAllCleanedRows ? data : data.slice(0, 50);
+
+            if (paginationBar) {
+                if (totalRows > 50) {
+                    paginationBar.classList.remove('hidden');
+                    if (showingCountEl) showingCountEl.innerText = displayRows.length;
+                    if (totalCountEl) totalCountEl.innerText = totalRows;
+                    if (btnToggle) {
+                        if (isShowAllCleanedRows) {
+                            btnToggle.innerHTML = `<i class="fa-solid fa-chevron-up mr-1.5"></i> Thu Gọn (Xem 50 dòng)`;
+                        } else {
+                            btnToggle.innerHTML = `<i class="fa-solid fa-table-list mr-1.5"></i> Show Toàn Bộ Dữ Liệu (${totalRows} dòng)`;
+                        }
+                    }
+                } else {
+                    paginationBar.classList.add('hidden');
+                }
+            }
+
+            // 3. Render dynamic <tbody> matching exactly the display columns
+            tbody.innerHTML = displayRows.map((r, i) => {
+                const cellsHtml = displayCols.map(col => {
+                    let val = r[col];
+                    if (val === undefined || val === null) {
+                        val = r[col.toLowerCase()] ?? r[col.replace(/\s+/g, '_').toLowerCase()] ?? '--';
+                    }
+                    if (val === '') val = '--';
+
+                    const colLow = col.toLowerCase();
+                    const isFinancialFile = lastApiResponse?.is_financial !== false && lastApiResponse?.domain_type !== 'MANUFACTURING_QUALITY' && lastApiResponse?.domain_type !== 'COHORT_RETENTION';
+                    const isMoney = (colLow.includes('vnd') || colLow.includes('tiền') || colLow.includes('giá vốn') || colLow.includes('doanh thu') || colLow.includes('chi phí') || colLow.includes('lợi nhuận')) && !colLow.includes('thời gian') && !colLow.includes('phút') && !colLow.includes('sản lượng') && !colLow.includes('lỗi');
+
+                    if (typeof val === 'number') {
+                        if (isFinancialFile && (isMoney || (val >= 10000 && !colLow.includes('phút') && !colLow.includes('sản phẩm')))) {
+                            return `<td class="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">${formatVND(val)}</td>`;
+                        } else {
+                            return `<td class="py-2.5 px-3.5 text-center font-mono font-medium text-slate-700">${val.toLocaleString('vi-VN')}</td>`;
+                        }
+                    } else {
+                        const sVal = String(val).toLowerCase();
+                        if (['online', 'website', 'thắng', 'hoàn tất'].includes(sVal)) {
+                            return `<td class="py-2.5 px-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd]">${val}</span></td>`;
+                        } else if (['thua', 'hủy', 'cần tái cơ cấu', 'vượt ngưỡng lỗi'].includes(sVal)) {
+                            return `<td class="py-2.5 px-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#fde2e4] text-[#872D43] border border-[#fad2e1]">${val}</span></td>`;
+                        }
+                        return `<td class="py-2.5 px-3.5 font-medium text-slate-700">${val}</td>`;
+                    }
+                }).join('');
+
+                return `
+                    <tr class="hover:bg-[#fde2e4]/30 transition-colors">
+                        <td class="py-2.5 px-3.5 text-center text-slate-400 font-mono text-[11px]">${i + 1}</td>
+                        ${cellsHtml}
+                        <td class="py-2.5 px-3.5 text-center">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#c5dedd]/40 text-[#183634] inline-flex items-center gap-1">
+                                <i class="fa-solid fa-check text-[#183634] text-[10px]"></i> Đã làm sạch
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            applyHiddenColumnsToTable('cleanedDataTable');
+        }
+
+        // Toggle between 50 rows and all rows
+        function toggleShowAllCleanedData() {
+            isShowAllCleanedRows = !isShowAllCleanedRows;
+            renderCleanedDataTable();
+        }
+        // Confirm Cleaned Data and Proceed to Step 3
+        function confirmCleanedDataAndProceed() {
+            if (!lastApiResponse || !lastApiResponse.summary_kpis || lastApiResponse.status === 'AWAITING_INPUT') {
+                showToast("📁 Chưa có tệp dữ liệu nào được tải lên. Vui lòng tải file ở Bước 1!", "info");
+                goToStep(1);
+                return;
+            }
+            showToast("🚀 Dữ liệu sạch đã được xác nhận! Bắt đầu chuyển sang Bước 3: Phân Tích P&L 13 Chỉ Số...", "success");
+            goToStep(3);
+        }
+
+        // Render Audit Logs
+        function renderAuditTrail(logs) {
+            const tbody = document.getElementById('auditTrailTable');
+            if (!logs || !logs.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400 italic font-sans">Chưa có nhật ký nào...</td></tr>`;
+                return;
+            }
+
+            const levelBadges = {
+                'INFO': 'bg-blue-50 text-blue-700 border-blue-200',
+                'WARNING': 'bg-amber-50 text-amber-700 border-amber-200',
+                'ACTION_REQUIRED': 'bg-rose-50 text-rose-700 border-rose-200'
+            };
+
+            tbody.innerHTML = logs.map(log => `
+                <tr class="hover:bg-slate-50/80">
+                    <td class="p-3 text-slate-500 whitespace-nowrap">${log.timestamp}</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${levelBadges[log.level] || levelBadges.INFO}">
+                            ${log.level}
+                        </span>
+                    </td>
+                    <td class="p-3 text-slate-800 font-bold">${log.step}</td>
+                    <td class="p-3 text-slate-600">${log.tool_name}</td>
+                    <td class="p-3 text-slate-700 font-sans">${log.message}</td>
+                </tr>
+            `).join('');
+        }
+
+        function filterLogs() {
+            const input = document.getElementById('logFilter').value.toLowerCase();
+            const rows = document.querySelectorAll('#auditTrailTable tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(input) ? '' : 'none';
+            });
+        }
+
+        // Render Sales Wave Chart
+        function renderSalesWaveChart(data, angle) {
+            const canvas = document.getElementById('chartSalesWave');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (salesWaveChartInstance) {
+                salesWaveChartInstance.destroy();
+                salesWaveChartInstance = null;
+            }
+
+            const currentAngle = angle || currentAnalysisAngle || 'CAMPAIGN';
+
+            if (currentAngle === 'CHANNEL') {
+                const channels = data?.channel_breakdown || [];
+                if (!channels.length) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    return;
+                }
+                const labels = channels.map(c => c.channel);
+                const grossRevs = channels.map(c => (c.gross_revenue || 0) / 1e6);
+                const netRevs = channels.map(c => (c.net_revenue || 0) / 1e6);
+                const returns = channels.map(c => (c.return_amount || 0) / 1e6);
+
+                salesWaveChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Doanh Thu Gộp (Tr. VNĐ)',
+                                data: grossRevs,
+                                backgroundColor: '#75BFB2',
+                                borderRadius: 8
+                            },
+                            {
+                                label: 'Hàng Hoàn Lại (Tr. VNĐ)',
+                                data: returns,
+                                backgroundColor: '#D991A4',
+                                borderRadius: 8
+                            },
+                            {
+                                label: 'Doanh Thu Thuần (Tr. VNĐ)',
+                                data: netRevs,
+                                backgroundColor: '#B8D9D3',
+                                borderRadius: 8
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } }, grid: { display: false } },
+                            y: { ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (currentAngle === 'PRODUCT') {
+                const products = (data?.product_breakdown || []).slice(0, 6);
+                if (!products.length) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    return;
+                }
+                const labels = products.map(p => `${p.product_id} (${p.quantity_sold} SP)`);
+                const revs = products.map(p => (p.gross_revenue || 0) / 1e6);
+                const margins = products.map(p => (p.gross_profit || 0) / 1e6);
+
+                salesWaveChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Doanh Thu Gộp (Tr. VNĐ)',
+                                data: revs,
+                                backgroundColor: '#75BFB2',
+                                borderRadius: 6
+                            },
+                            {
+                                label: 'Lợi Nhuận Gộp (Tr. VNĐ)',
+                                data: margins,
+                                backgroundColor: '#D991A4',
+                                borderRadius: 6
+                            }
+                        ]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } },
+                            y: { ticks: { color: '#334155', font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } }, grid: { display: false } }
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (currentAngle === 'TIMELINE') {
+                const timeline = data?.timeline_breakdown || [];
+                if (!timeline.length) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    return;
+                }
+                const labels = timeline.map(t => t.date);
+                const netRevs = timeline.map(t => (t.net_revenue || 0) / 1e6);
+                const orders = timeline.map(t => t.orders_count || 0);
+
+                salesWaveChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Doanh Thu Thuần (Tr. VNĐ)',
+                                data: netRevs,
+                                borderColor: '#75BFB2',
+                                backgroundColor: 'rgba(117, 191, 178, 0.35)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.35,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#75BFB2',
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Số Lượng Đơn',
+                                data: orders,
+                                borderColor: '#D991A4',
+                                backgroundColor: 'rgba(217, 145, 164, 0.45)',
+                                borderWidth: 2,
+                                borderDash: [4, 4],
+                                pointRadius: 4,
+                                pointBackgroundColor: '#D991A4',
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 } }, grid: { display: false } },
+                            y: { position: 'left', ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } },
+                            y1: { position: 'right', ticks: { color: '#D991A4', font: { family: 'Plus Jakarta Sans', size: 10 }, stepSize: 1 }, grid: { display: false } }
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (currentAngle === 'REGION') {
+                const regions = data?.region_breakdown || [];
+                if (!regions.length) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    return;
+                }
+                salesWaveChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: regions.map(r => `${r.region} (${r.revenue_share_pct}%)`),
+                        datasets: [{
+                            data: regions.map(r => (r.net_revenue || 0) / 1e6),
+                            backgroundColor: [
+                                '#75BFB2',
+                                '#D991A4',
+                                '#B8D9D3',
+                                '#D9A3AC',
+                                '#203833'
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (currentAngle === 'COST_STRUCTURE') {
+                const kpis = data?.financial_kpis || {};
+                const costLabels = [];
+                const costVals = [];
+                const costColors = [];
+                if (kpis.total_cogs > 0) { costLabels.push('Giá Vốn (COGS)'); costVals.push(kpis.total_cogs / 1e6); costColors.push('#D9A3AC'); }
+                if (kpis.total_discount_amount > 0) { costLabels.push('Chiết Khấu'); costVals.push(kpis.total_discount_amount / 1e6); costColors.push('#D991A4'); }
+                if (kpis.total_campaign_costs > 0) { costLabels.push('Chi Phí MKT'); costVals.push(kpis.total_campaign_costs / 1e6); costColors.push('#B8D9D3'); }
+                if (kpis.total_contribution_margin > 0) { costLabels.push('Biên Đóng Góp (CM)'); costVals.push(kpis.total_contribution_margin / 1e6); costColors.push('#75BFB2'); }
+
+                salesWaveChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: costLabels,
+                        datasets: [{ data: costVals, backgroundColor: costColors, borderWidth: 2, borderColor: '#ffffff' }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } } }
+                    }
+                });
+                return;
+            }
+
+            if (currentAngle === 'CATEGORY') {
+                const categories = data?.category_breakdown || [];
+                if (!categories.length) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    return;
+                }
+                salesWaveChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: categories.map(c => c.category),
+                        datasets: [
+                            { label: 'Doanh Thu Thuần (Tr. VNĐ)', data: categories.map(c => (c.net_revenue || 0) / 1e6), backgroundColor: '#75BFB2', borderRadius: 6 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } } },
+                        scales: {
+                            x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
+                            y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
+                        }
+                    }
+                });
+                return;
+            }
+
+            // Default: CAMPAIGN Angle
+            let pnl = (data && data.pnl_table ? data.pnl_table : []).filter(p => p.campaign_id !== 'ORGANIC');
+            if (!pnl.length) {
+                pnl = (data && data.pnl_table ? data.pnl_table : []);
+            }
+            if (!pnl.length) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            const labels = pnl.map(x => x.campaign_name);
+            const netRevenues = pnl.map(x => x.net_revenue / 1e6);
+            const contributionMargins = pnl.map(x => x.contribution_margin / 1e6);
+
+            const tealGradient = ctx.createLinearGradient(0, 0, 0, 250);
+            tealGradient.addColorStop(0, 'rgba(117, 191, 178, 0.40)');
+            tealGradient.addColorStop(1, 'rgba(117, 191, 178, 0.0)');
+
+            const roseGradient = ctx.createLinearGradient(0, 0, 0, 250);
+            roseGradient.addColorStop(0, 'rgba(217, 145, 164, 0.45)');
+            roseGradient.addColorStop(1, 'rgba(217, 145, 164, 0.0)');
+
+            salesWaveChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Doanh Thu Thuần (Triệu VNĐ)',
+                            data: netRevenues,
+                            borderColor: '#75BFB2',
+                            backgroundColor: tealGradient,
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.45,
+                            pointBackgroundColor: '#ffffff',
+                            pointBorderColor: '#75BFB2',
+                            pointBorderWidth: 2,
+                            pointRadius: 5
+                        },
+                        {
+                            label: 'Biên Đóng Góp CM (Triệu VNĐ)',
+                            data: contributionMargins,
+                            borderColor: '#D991A4',
+                            backgroundColor: roseGradient,
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.45,
+                            pointBackgroundColor: '#ffffff',
+                            pointBorderColor: '#D991A4',
+                            pointBorderWidth: 2,
+                            pointRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' } } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 } }, grid: { display: false } },
+                        y: { ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 }, callback: v => v + ' tr' }, grid: { color: '#f1f5f9' } }
+                    }
+                }
+            });
+        }
+
+        // Markdown formatter for Copilot
+        function renderMarkdownToHtml(mdText) {
+            if (!mdText) return '';
+            let html = mdText
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            html = html.replace(/^### (.*$)/gim, '<h4 class="font-bold text-forshop-sidebar mt-2.5 mb-1">$1</h4>');
+            html = html.replace(/^## (.*$)/gim, '<h3 class="font-extrabold text-forshop-sidebar mt-3 mb-1.5 text-sm">$1</h3>');
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-900">$1</strong>');
+            html = html.replace(/`([^`]+)`/g, '<code class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[11px] font-mono border border-indigo-100">$1</code>');
+            html = html.replace(/^\s*(\d+)\.\s+(.*$)/gim, '<div class="flex items-start gap-1.5 my-1"><span class="font-bold text-forshop-sidebar min-w-[20px]">$1.</span><span>$2</span></div>');
+            html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<div class="flex items-start gap-1.5 my-0.5"><span class="text-forshop-sidebar font-bold">•</span><span>$1</span></div>');
+            html = html.replace(/\n\n/g, '<div class="h-2"></div>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function sendCopilotQueryDirect(q) {
+            const input = document.getElementById('copilotInput');
+            if (input) {
+                input.value = q;
+                sendCopilotQuery();
+            }
+        }
+
+        // Gemini Copilot Query
+        async function sendCopilotQuery() {
+            const input = document.getElementById('copilotInput');
+            const query = input.value.trim();
+            if (!query) return;
+
+            const chatBox = document.getElementById('copilotMessages');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'p-3 bg-forshop-sidebar text-white rounded-2xl max-w-[80%] ml-auto text-xs font-medium shadow-xs';
+            userMsg.innerText = query;
+            chatBox.appendChild(userMsg);
+            input.value = '';
+
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'p-3 bg-white text-indigo-700 rounded-2xl border border-indigo-100 text-xs flex items-center gap-2 shadow-xs';
+            loadingMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-forshop-sidebar"></i> Gemini đang phân tích dữ liệu và suy nghĩ câu trả lời...`;
+            chatBox.appendChild(loadingMsg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                const data = await res.json().catch(() => ({}));
+                const answerText = data.answer || data.error || "Hệ thống đang bận phân tích, vui lòng gửi lại câu hỏi.";
+                loadingMsg.className = 'p-3.5 bg-white text-slate-700 rounded-2xl border border-slate-100 text-xs shadow-xs max-w-[85%]';
+                loadingMsg.innerHTML = `
+                    <div class="flex items-center gap-2 mb-1.5 pb-1 border-b border-slate-100">
+                        <i class="fa-solid fa-wand-magic-sparkles text-cyan-500"></i>
+                        <strong class="text-forshop-sidebar font-bold text-xs">Gemini AI Cố Vấn:</strong>
+                    </div>
+                    <div class="leading-relaxed text-slate-700">
+                        ${renderMarkdownToHtml(answerText)}
+                    </div>`;
+            } catch (err) {
+                loadingMsg.className = 'p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-800 text-xs shadow-xs max-w-[85%]';
+                loadingMsg.innerHTML = `
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-circle-exclamation text-amber-600"></i>
+                            <span>Máy chủ đang bận xử lý. Bạn có thể nhấn để thử lại ngay.</span>
+                        </div>
+                        <button onclick="sendCopilotQueryDirect('${query.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg text-[11px] shrink-0 transition">
+                            Thử lại
+                        </button>
+                    </div>`;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Standalone Exports
+        function exportHtmlPnL() {
+            window.location.href = '/api/export_html_pnl';
+        }
+
+        function exportHtmlDashboard() {
+            window.location.href = '/api/export_html_dashboard';
+        }
+
+        function exportExcel() {
+            window.location.href = '/api/export_excel';
+        }
+
+        function exportJSON() {
+            window.location.href = '/api/export_json';
+        }
+
+        function signAndLockReport() {
+            const signed = document.getElementById('signApproval').checked;
+            if (!signed) {
+                alert('Vui lòng tích chọn ô xác nhận trước khi duyệt khóa báo cáo.');
+                return;
+            }
+            const pill = document.getElementById('signStatusPill');
+            if (pill) pill.classList.remove('hidden');
+            showToast('✅ Báo cáo P&L đã được THU HÀ KÝ DUYỆT THÀNH CÔNG và lưu vào Nhật ký Audit Trail!');
+        }
+
+        // ===================================================================
+        // AI COPILOT SMART ANGLES CONTROLLER & MODAL
+        // ===================================================================
+        function triggerAiSmartAngleAnalysis() {
+            if (!lastApiResponse || !lastApiResponse.pnl_table || lastApiResponse.pnl_table.length === 0) {
+                showToast("⚠️ Vui lòng tải dữ liệu và nhấn 'Đồng ý với các hướng giải quyết làm sạch' trước khi chạy phân tích AI!", "warning");
+                goToStep(1);
+                return;
+            }
+
+            renderAiSmartModalContent(lastApiResponse);
+            
+            const modal = document.getElementById('modalAiSmartAnalysis');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+            showToast("✨ AI đã kích hoạt toàn diện các góc nhìn phân tích phù hợp!", "success");
+        }
+
+        function closeAiSmartModal() {
+            const modal = document.getElementById('modalAiSmartAnalysis');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function runAiOverviewNow() {
+            closeAiSmartModal();
+            switchAnalysisAngle('OVERVIEW');
+            showToast("📊 Đang hiển thị Toàn bộ các Biểu Đồ Phân Tích Đa Chiều!", "info");
+            setTimeout(() => {
+                const target = document.getElementById('multiChartOverviewContainer') || document.getElementById('salesWaveContainer');
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 150);
+        }
+
+        function selectAngleFromModal(angle) {
+            closeAiSmartModal();
+            switchAnalysisAngle(angle);
+            showToast(`🎯 Chuyển sang góc nhìn phân tích: ${angle}`, "info");
+            setTimeout(() => {
+                const target = document.getElementById('singleAngleChartContainer') || document.getElementById('salesWaveContainer');
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 150);
+        }
+
+        function renderAiSmartModalContent(data) {
+            if (!data) return;
+            const container = document.getElementById('aiModalCardsContainer');
+            if (!container) return;
+
+            const channels = (data.channel_breakdown || []).filter(c => c && c.channel && c.channel !== 'Unknown');
+            const products = (data.product_breakdown || []).filter(p => p && p.product_id);
+            const timeline = (data.timeline_breakdown || []).filter(t => t && t.date);
+            const regions = (data.region_breakdown || []).filter(r => r && r.region && r.region !== 'None');
+            const campaigns = (data.pnl_table || []).filter(p => p && p.campaign_id !== 'ORGANIC');
+            const categories = (data.category_breakdown || []).filter(c => c && c.category);
+            const kpis = data.financial_kpis || {};
+            const hasCosts = (kpis.total_cogs > 0 || kpis.total_discount_amount > 0 || kpis.total_campaign_costs > 0) && kpis.total_gross_revenue > 0;
+
+            const modalAngles = [];
+
+            if (channels.length > 1) {
+                const topCh = [...channels].sort((a,b) => (b.net_revenue||0) - (a.net_revenue||0))[0];
+                modalAngles.push({
+                    id: 'CHANNEL',
+                    name: 'Kênh Bán (Omnichannel)',
+                    icon: 'fa-solid fa-store text-sky-600',
+                    bg: 'bg-sky-50/70 border-sky-200/90 hover:border-sky-300',
+                    btnBg: 'bg-sky-600 hover:bg-sky-700',
+                    desc: `Phân tích <b>${channels.length}</b> kênh bán. Dẫn đầu: <b>${topCh.channel}</b> (${formatVND(topCh.net_revenue)} DT thuần, ${topCh.orders_count || 0} đơn).`
+                });
+            }
+
+            if (products.length > 1) {
+                const topProd = [...products].sort((a,b) => (b.net_revenue||0) - (a.net_revenue||0))[0];
+                modalAngles.push({
+                    id: 'PRODUCT',
+                    name: 'Sản Phẩm (Pareto 80/20)',
+                    icon: 'fa-solid fa-box-open text-purple-600',
+                    bg: 'bg-purple-50/70 border-purple-200/90 hover:border-purple-300',
+                    btnBg: 'bg-purple-600 hover:bg-purple-700',
+                    desc: `Theo dõi <b>${products.length}</b> SKU. Top 1: <b>${topProd.product_id}</b> (${formatVND(topProd.net_revenue)} DT thuần, ${topProd.quantity_sold || 0} SP).`
+                });
+            }
+
+            if (regions.length > 1) {
+                const topReg = [...regions].sort((a,b) => (b.net_revenue||0) - (a.net_revenue||0))[0];
+                modalAngles.push({
+                    id: 'REGION',
+                    name: 'Khu Vực (Địa Bàn)',
+                    icon: 'fa-solid fa-map-location-dot text-emerald-600',
+                    bg: 'bg-emerald-50/70 border-emerald-200/90 hover:border-emerald-300',
+                    btnBg: 'bg-emerald-600 hover:bg-emerald-700',
+                    desc: `Phân phối <b>${regions.length}</b> khu vực. Thị phần cao nhất: <b>${topReg.region}</b> (${formatVND(topReg.net_revenue)} DT, ${topReg.revenue_share_pct}% thị phần).`
+                });
+            }
+
+            if (timeline.length > 1) {
+                const topDay = [...timeline].sort((a,b) => (b.net_revenue||0) - (a.net_revenue||0))[0];
+                modalAngles.push({
+                    id: 'TIMELINE',
+                    name: 'Dòng Thời Gian (Daily Trend)',
+                    icon: 'fa-solid fa-calendar-days text-amber-600',
+                    bg: 'bg-amber-50/70 border-amber-200/90 hover:border-amber-300',
+                    btnBg: 'bg-amber-600 hover:bg-amber-700',
+                    desc: `Ghi nhận <b>${timeline.length}</b> mốc thời gian. Ngày đỉnh điểm: <b>${topDay.date}</b> (${formatVND(topDay.net_revenue)}).`
+                });
+            }
+
+            if (campaigns.length > 1) {
+                const topCamp = [...campaigns].sort((a,b) => (b.contribution_margin||0) - (a.contribution_margin||0))[0];
+                modalAngles.push({
+                    id: 'CAMPAIGN',
+                    name: 'Chiến Dịch (Campaign P&L)',
+                    icon: 'fa-solid fa-bullhorn text-indigo-600',
+                    bg: 'bg-indigo-50/70 border-indigo-200/90 hover:border-indigo-300',
+                    btnBg: 'bg-indigo-600 hover:bg-indigo-700',
+                    desc: `Bao gồm <b>${campaigns.length}</b> chiến dịch. Lợi nhuận cao nhất: <b>${topCamp.campaign_name}</b> (CM: ${formatVND(topCamp.contribution_margin)}).`
+                });
+            }
+
+            if (hasCosts) {
+                modalAngles.push({
+                    id: 'COST_STRUCTURE',
+                    name: 'Cơ Cấu Chi Phí & Giá Vốn',
+                    icon: 'fa-solid fa-chart-pie text-rose-600',
+                    bg: 'bg-rose-50/70 border-rose-200/90 hover:border-rose-300',
+                    btnBg: 'bg-rose-600 hover:bg-rose-700',
+                    desc: `Giá vốn COGS: <b>${formatVND(kpis.total_cogs||0)}</b> • Chiết khấu: <b>${formatVND(kpis.total_discount_amount||0)}</b> • Lợi nhuận CM: <b>${formatVND(kpis.total_contribution_margin||0)}</b>.`
+                });
+            }
+
+            if (categories.length > 1) {
+                modalAngles.push({
+                    id: 'CATEGORY',
+                    name: 'Ngành Hàng (Category)',
+                    icon: 'fa-solid fa-layer-group text-teal-600',
+                    bg: 'bg-teal-50/70 border-teal-200/90 hover:border-teal-300',
+                    btnBg: 'bg-teal-600 hover:bg-teal-700',
+                    desc: `Phân loại <b>${categories.length}</b> ngành hàng. Dẫn đầu: <b>${categories[0].category}</b> (${formatVND(categories[0].net_revenue)}).`
+                });
+            }
+
+            const totalActive = modalAngles.length;
+
+            const statusTextEl = document.getElementById('aiModalStatusText');
+            if (statusTextEl) {
+                statusTextEl.innerText = `AI đã tự động kích hoạt ${totalActive} góc nhìn phân tích chuyên sâu phù hợp nhất với dữ liệu`;
+            }
+            const activeBadgeEl = document.getElementById('aiModalActiveBadge');
+            if (activeBadgeEl) {
+                activeBadgeEl.innerText = `${totalActive} Góc Nhìn Kích Hoạt`;
+            }
+
+            container.innerHTML = modalAngles.map(a => `
+                <div class="p-4 rounded-2xl ${a.bg} border flex flex-col justify-between transition">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                            <i class="${a.icon}"></i> ${a.name}
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black flex items-center gap-1">
+                            <i class="fa-solid fa-circle-check text-[9px]"></i> Kích hoạt
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-600 mb-2">${a.desc}</p>
+                    <button type="button" onclick="selectAngleFromModal('${a.id}')" class="btn-smooth w-full py-2 px-3 rounded-xl ${a.btnBg} text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
+                        <i class="fa-solid fa-chart-column"></i> Xem Góc Nhìn Này
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // ===================================================================
+        // DATALENS STUDIO SUITE: CONTEXTUAL QA, METADATA, GROUP COMPARISON & PROFILER
+        // ===================================================================
+        function renderContextualQA(data) {
+            const container = document.getElementById('contextualQaContainer');
+            if (!container) return;
+            const qas = data?.contextual_qa || [];
+            if (!qas.length) {
+                container.innerHTML = `
+                    <div class="p-8 bg-slate-50 border border-slate-200/80 rounded-2xl text-center text-slate-400 italic text-xs">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-300 block mb-2"></i>
+                        Chưa có dữ liệu. Vui lòng tải tệp Excel hoặc CSV lên ở Bước 1 để AI tự động khám phá và trả lời các câu hỏi kinh doanh.
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = qas.map(q => `
+                <div class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-1.5">
+                    <div class="text-xs font-black text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid ${q.icon || 'fa-circle-question text-emerald-600'}"></i>
+                        <span>${q.question}</span>
+                    </div>
+                    <div class="text-xs text-slate-600 space-y-1 pl-5">
+                        ${q.bullets.map(b => `<p class="leading-relaxed">• ${b}</p>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderDatasetMeta(data) {
+            if (!data) return;
+            const meta = data.dataset_meta || {};
+            const totalRows = meta.total_rows || (data.cleaned_orders_table?.length || 0);
+            const totalCols = meta.total_cols || (data.column_profiling?.length || 0);
+            const numCols = meta.numeric_cols_count || 0;
+
+            const elRows = document.getElementById('statTotalRows');
+            if (elRows) elRows.innerText = totalRows > 0 ? totalRows.toLocaleString('vi-VN') : '0';
+
+            const elCols = document.getElementById('statTotalCols');
+            if (elCols) elCols.innerText = totalCols;
+
+            const elNum = document.getElementById('statNumericCols');
+            if (elNum) elNum.innerText = numCols;
+
+            const selectOpt = document.getElementById('datasetSelectOption');
+            const subtitle = document.getElementById('ctxQaSubtitle');
+
+            if (totalRows === 0) {
+                if (selectOpt) selectOpt.innerText = '-- Chưa tải tệp dữ liệu --';
+                if (subtitle) subtitle.innerText = 'Chờ tải tệp dữ liệu...';
+            } else {
+                const name = meta.dataset_name || (uploadedFileName ? `Bộ 1 — ${uploadedFileName} (${totalRows.toLocaleString('vi-VN')} dòng)` : `Bộ 1 (${totalRows.toLocaleString('vi-VN')} dòng)`);
+                if (selectOpt) selectOpt.innerText = name;
+                if (subtitle) subtitle.innerText = `${name} • 1 bộ dữ liệu (${totalRows.toLocaleString('vi-VN')} dòng)`;
+            }
+        }
+
+        function onDatasetDropdownChange() {
+            showToast('Đang chọn: ' + (document.getElementById('datasetSelectDropdown')?.value || 'Bộ 1'), 'info');
+        }
+
+        // Chuẩn hóa & ép kiểu số thực an toàn cho mọi định dạng (185.500.000, 185,500,000, 185500000)
+        function parseSafeNum(val) {
+            if (val === null || val === undefined) return 0;
+            if (typeof val === 'number') return isNaN(val) ? 0 : val;
+            let s = String(val).trim();
+            if (!s) return 0;
+            s = s.replace(/[₫đĐVNDvnd\s]/g, '');
+            if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
+                s = s.replace(/,/g, '');
+            } else {
+                s = s.replace(/,/g, '');
+            }
+            const n = parseFloat(s);
+            return isNaN(n) ? 0 : n;
+        }
+
+        // Lấy giá trị số của bản ghi theo tên cột hoặc các bí danh kế toán (Aliases)
+        function getRowMetricValue(r, metricKey) {
+            if (!r) return 0;
+            if (r[metricKey] !== undefined && r[metricKey] !== null) {
+                const n = parseSafeNum(r[metricKey]);
+                if (n !== 0) return n;
+            }
+            const keyLower = String(metricKey).toLowerCase();
+
+            // Doanh thu (Gross & Net Revenue)
+            if (keyLower.includes('doanh thu') || keyLower.includes('revenue') || keyLower.includes('gross') || keyLower.includes('tiền') || keyLower.includes('thành tiền')) {
+                for (const k of ['gross_revenue', 'gross_amount', 'net_revenue', 'attributed_net_rev', 'attributed_gross', 'Doanh thu (VND)', 'Doanh thu', 'thành_tiền', 'doanh_thu']) {
+                    if (r[k] !== undefined && r[k] !== null) {
+                        const v = parseSafeNum(r[k]);
+                        if (v !== 0) return v;
+                    }
+                }
+            }
+
+            // Giá vốn & Chi phí (COGS / Costs)
+            if (keyLower.includes('cogs') || keyLower.includes('giá vốn') || keyLower.includes('gia_von') || keyLower.includes('chi phí') || keyLower.includes('cost')) {
+                for (const k of ['cogs', 'attributed_cogs', 'total_cogs', 'unit_cogs', 'Chi phí giá vốn (VND)', 'giá vốn', 'gia_von', 'chi_phi_gia_von']) {
+                    if (r[k] !== undefined && r[k] !== null) {
+                        const v = parseSafeNum(r[k]);
+                        if (v !== 0) return v;
+                    }
+                }
+            }
+
+            // Lợi nhuận (Gross Profit & Contribution Margin)
+            if (keyLower.includes('lợi nhuận') || keyLower.includes('profit') || keyLower.includes('margin') || keyLower.includes('cm')) {
+                for (const k of ['gross_profit', 'contribution_margin', 'Lợi nhuận gộp (VND)', 'loi_nhuan_gop', 'loi_nhuan']) {
+                    if (r[k] !== undefined && r[k] !== null) {
+                        const v = parseSafeNum(r[k]);
+                        if (v !== 0) return v;
+                    }
+                }
+            }
+
+            // Chiết khấu (Discount)
+            if (keyLower.includes('chiết khấu') || keyLower.includes('discount') || keyLower.includes('voucher') || keyLower.includes('giảm')) {
+                for (const k of ['discount_amount', 'attributed_discount', 'Chiết khấu (VND)', 'chiet_khau']) {
+                    if (r[k] !== undefined && r[k] !== null) {
+                        const v = parseSafeNum(r[k]);
+                        if (v !== 0) return v;
+                    }
+                }
+            }
+
+            // Hàng bán trả (Returns)
+            if (keyLower.includes('hoàn') || keyLower.includes('trả') || keyLower.includes('return')) {
+                for (const k of ['return_amount', 'attributed_return', 'Hàng bán trả (VND)', 'hang_ban_tra']) {
+                    if (r[k] !== undefined && r[k] !== null) {
+                        const v = parseSafeNum(r[k]);
+                        if (v !== 0) return v;
+                    }
+                }
+            }
+
+            // Số lượng đơn / sản phẩm (Quantity)
+            if (keyLower.includes('số đơn') || keyLower.includes('số lượng') || keyLower.includes('quantity') || keyLower.includes('qty')) {
+                for (const k of ['quantity', 'Số đơn', 'so_luong', 'so_don']) {
+                    if (r[k] !== undefined && r[k] !== null) {
+                        const v = parseSafeNum(r[k]);
+                        if (v !== 0) return v;
+                    }
+                }
+                return 1;
+            }
+
+            // Match case-insensitive
+            for (const [k, v] of Object.entries(r)) {
+                if (k.toLowerCase() === keyLower && v !== undefined && v !== null) {
+                    return parseSafeNum(v);
+                }
+            }
+            return 0;
+        }
+
+        // Lấy tên nhóm phân loại của bản ghi theo cột hoặc các bí danh
+        function getRowDimValue(r, dimKey) {
+            if (!r) return 'Chưa phân nhóm';
+            if (r[dimKey] !== undefined && r[dimKey] !== null && String(r[dimKey]).trim() !== '' && String(r[dimKey]).trim().toLowerCase() !== 'none') {
+                return String(r[dimKey]).trim();
+            }
+            const keyLower = String(dimKey).toLowerCase();
+
+            // Khu vực / Vùng miền
+            if (keyLower.includes('khu vực') || keyLower.includes('region') || keyLower.includes('miền') || keyLower.includes('vùng')) {
+                for (const k of ['region', 'Khu vực', 'khu_vuc', 'vung_mien', 'khuvuc', 'mien']) {
+                    if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '' && String(r[k]).trim().toLowerCase() !== 'none') {
+                        return String(r[k]).trim();
+                    }
+                }
+            }
+
+            // Kênh bán hàng
+            if (keyLower.includes('kênh') || keyLower.includes('channel') || keyLower.includes('sàn') || keyLower.includes('store')) {
+                for (const k of ['channel', 'Kênh', 'kenh', 'kenh_ban', 'kênh bán', 'sàn']) {
+                    if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') {
+                        return String(r[k]).trim();
+                    }
+                }
+            }
+
+            // Sản phẩm / SKU
+            if (keyLower.includes('sản phẩm') || keyLower.includes('product') || keyLower.includes('sku') || keyLower.includes('hàng')) {
+                for (const k of ['product_name', 'product_id', 'Sản phẩm', 'san_pham', 'ten_sp', 'sku']) {
+                    if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') {
+                        return String(r[k]).trim();
+                    }
+                }
+            }
+
+            // Thời gian / Ngày / Tháng
+            if (keyLower.includes('thời gian') || keyLower.includes('date') || keyLower.includes('ngày') || keyLower.includes('tháng')) {
+                for (const k of ['date', 'Tháng', 'thang', 'ngay', 'date_str']) {
+                    if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') {
+                        return String(r[k]).trim();
+                    }
+                }
+            }
+
+            // Chiến dịch
+            if (keyLower.includes('chiến dịch') || keyLower.includes('campaign')) {
+                for (const k of ['campaign_id', 'Chiến dịch', 'campaign_name', 'chien_dich']) {
+                    if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') {
+                        return String(r[k]).trim();
+                    }
+                }
+            }
+
+            // Match case-insensitive
+            for (const [k, v] of Object.entries(r)) {
+                if (k.toLowerCase() === keyLower && v !== undefined && v !== null && String(v).trim() !== '') {
+                    return String(v).trim();
+                }
+            }
+            return 'Chưa phân nhóm';
+        }
+
+        // Tự động phân loại cột dạng phân nhóm và cột số theo bộ dữ liệu thực tế tải lên
+        function setupDynamicGroupSelects(data) {
+            const dimSelect = document.getElementById('grpDimSelect');
+            const metricSelect = document.getElementById('grpMetricSelect');
+            if (!dimSelect || !metricSelect) return;
+
+            const profCols = data.column_profiling || [];
+            let dimCols = [];
+            let numCols = [];
+
+            if (profCols.length > 0) {
+                const seenDim = new Set();
+                const seenNum = new Set();
+                profCols.forEach(c => {
+                    const nameKey = (c.column_name || c.column_key).trim().toLowerCase();
+                    if (c.data_type === 'Số') {
+                        if (!seenNum.has(nameKey)) {
+                            seenNum.add(nameKey);
+                            numCols.push({ key: c.column_key, name: c.column_name });
+                        }
+                    } else {
+                        if (!seenDim.has(nameKey)) {
+                            seenDim.add(nameKey);
+                            dimCols.push({ key: c.column_key, name: c.column_name });
+                        }
+                    }
+                });
+            } else {
+                const sample = (data.cleaned_orders_table && data.cleaned_orders_table[0]) || {};
+                Object.keys(sample).forEach(k => {
+                    if (typeof sample[k] === 'number') {
+                        numCols.push({ key: k, name: k });
+                    } else {
+                        dimCols.push({ key: k, name: k });
+                    }
+                });
+            }
+
+            const curDim = dimSelect.value;
+            const curMetric = metricSelect.value;
+
+            if (dimCols.length > 0) {
+                dimSelect.innerHTML = dimCols.map(c => 
+                    `<option value="${c.key}">${c.name}</option>`
+                ).join('');
+                if (dimCols.some(c => c.key === curDim)) {
+                    dimSelect.value = curDim;
+                } else {
+                    const preferred = dimCols.find(c => ['region', 'Khu vực', 'channel', 'Kênh', 'product_id', 'product_name', 'campaign_id'].includes(c.key));
+                    dimSelect.value = preferred ? preferred.key : dimCols[0].key;
+                }
+            } else {
+                dimSelect.innerHTML = `<option value="">-- Không có cột phân loại --</option>`;
+            }
+
+            if (numCols.length > 0) {
+                metricSelect.innerHTML = numCols.map(c => 
+                    `<option value="${c.key}">${c.name}</option>`
+                ).join('');
+                if (numCols.some(c => c.key === curMetric)) {
+                    metricSelect.value = curMetric;
+                } else {
+                    const preferred = numCols.find(c => ['gross_revenue', 'Doanh thu (VND)', 'net_revenue', 'cogs', 'gross_profit'].includes(c.key));
+                    metricSelect.value = preferred ? preferred.key : numCols[0].key;
+                }
+            } else {
+                metricSelect.innerHTML = `<option value="">-- Không có cột số --</option>`;
+            }
+        }
+
+        function renderGroupComparison() {
+            if (!lastApiResponse) return;
+            const dim = document.getElementById('grpDimSelect')?.value;
+            const agg = document.getElementById('grpAggSelect')?.value || 'sum';
+            const metric = document.getElementById('grpMetricSelect')?.value;
+
+            const barsContainer = document.getElementById('groupBarsContainer');
+            if (!barsContainer) return;
+
+            if (!dim || !metric) {
+                barsContainer.innerHTML = `
+                    <div class="p-8 bg-slate-50 border border-slate-200/80 rounded-2xl text-center text-slate-400 italic text-xs">
+                        <i class="fa-solid fa-chart-simple text-2xl text-slate-300 block mb-2"></i>
+                        Chưa có dữ liệu. Vui lòng tải tệp để AI tự động tổng hợp và so sánh theo từng nhóm.
+                    </div>
+                `;
+                return;
+            }
+
+            const records = (lastApiResponse.cleaned_orders_table && lastApiResponse.cleaned_orders_table.length > 0)
+                ? lastApiResponse.cleaned_orders_table
+                : (lastApiResponse.pnl_table || []);
+
+            if (!records.length) {
+                barsContainer.innerHTML = `<div class="p-6 text-center text-slate-400 italic text-xs">Chưa có dữ liệu để tổng hợp theo nhóm.</div>`;
+                return;
+            }
+
+            const dimSelectEl = document.getElementById('grpDimSelect');
+            const dimLabel = (dimSelectEl && dimSelectEl.options[dimSelectEl.selectedIndex]?.text) || dim;
+            const metricSelectEl = document.getElementById('grpMetricSelect');
+            const metricLabel = (metricSelectEl && metricSelectEl.options[metricSelectEl.selectedIndex]?.text) || metric;
+            const aggLabels = {
+                sum: 'tổng',
+                avg: 'trung bình',
+                count: 'số lượng đơn/dòng',
+                max: 'giá trị lớn nhất',
+                min: 'giá trị nhỏ nhất'
+            };
+
+            const groups = {};
+            const allMetricValues = [];
+
+            records.forEach(r => {
+                const groupKey = getRowDimValue(r, dim);
+                const val = getRowMetricValue(r, metric);
+                allMetricValues.push(val);
+
+                if (!groups[groupKey]) {
+                    groups[groupKey] = [];
+                }
+                groups[groupKey].push(val);
+            });
+
+            const groupResults = [];
+            for (const [key, vals] of Object.entries(groups)) {
+                let aggVal = 0;
+                if (agg === 'sum') {
+                    aggVal = vals.reduce((a, b) => a + b, 0);
+                } else if (agg === 'avg') {
+                    aggVal = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                } else if (agg === 'count') {
+                    aggVal = vals.length;
+                } else if (agg === 'max') {
+                    aggVal = Math.max(...vals);
+                } else if (agg === 'min') {
+                    aggVal = Math.min(...vals);
+                }
+                groupResults.push({ name: key, val: aggVal, count: vals.length });
+            }
+
+            groupResults.sort((a, b) => b.val - a.val);
+            const maxVal = Math.max(...groupResults.map(g => g.val), 1);
+            const totalAggSum = groupResults.reduce((acc, cur) => acc + cur.val, 0);
+
+            const metricLower = (metric + ' ' + metricLabel).toLowerCase();
+            const isCurrency = metricLower.includes('vnd') || metricLower.includes('doanh thu') || metricLower.includes('tiền') || metricLower.includes('cogs') || metricLower.includes('chi phí') || metricLower.includes('giá') || metricLower.includes('revenue') || metricLower.includes('cost') || metricLower.includes('lợi nhuận') || metricLower.includes('profit') || metricLower.includes('chiết khấu') || metricLower.includes('discount') || metricLower.includes('đơn giá');
+            const formatMetricVal = (val) => {
+                if (agg === 'count' || metricLower.includes('số lượng') || metricLower.includes('quantity') || metricLower.includes('số đơn')) {
+                    return `${Math.round(val).toLocaleString('vi-VN')} đơn/dòng`;
+                }
+                return isCurrency ? formatVND(val) : val.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+            };
+
+            barsContainer.innerHTML = groupResults.map(g => {
+                const pct = Math.max(6, Math.min(100, Math.round((g.val / maxVal) * 100)));
+                return `
+                    <div class="flex items-center gap-4 text-xs">
+                        <div class="w-32 sm:w-40 font-semibold text-slate-700 truncate text-left" title="${g.name}">
+                            ${g.name}
+                        </div>
+                        <div class="flex-1 h-3.5 bg-slate-100 rounded-full overflow-hidden flex items-center p-0.5">
+                            <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="w-28 sm:w-36 text-right font-mono font-bold text-slate-900 shrink-0">
+                            ${formatMetricVal(g.val)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const caption = document.getElementById('grpSubtextCaption');
+            if (caption) {
+                caption.innerText = `${groupResults.length} nhóm theo giá trị giảm dần.`;
+            }
+
+            // Nhận xét tự động kết hợp AI (AI Automated Insights)
+            const insightsContainer = document.getElementById('grpAutoInsightsList');
+            if (insightsContainer) {
+                const topGroup = groupResults[0] || { name: 'Nhóm', val: 0 };
+                const bottomGroup = groupResults[groupResults.length - 1] || topGroup;
+                const formattedTop = formatMetricVal(topGroup.val);
+                const sharePct = (totalAggSum > 0 && agg === 'sum') ? ((topGroup.val / totalAggSum) * 100).toFixed(1) : null;
+                const ratioDiff = (bottomGroup.val > 0 && topGroup.val > bottomGroup.val) ? (topGroup.val / bottomGroup.val).toFixed(1) : null;
+
+                const minMetricVal = allMetricValues.length ? Math.min(...allMetricValues) : 0;
+                const maxMetricVal = allMetricValues.length ? Math.max(...allMetricValues) : 0;
+                const avgMetricVal = allMetricValues.length ? (allMetricValues.reduce((a,b)=>a+b,0) / allMetricValues.length) : 0;
+                
+                const fmtMin = formatMetricVal(minMetricVal);
+                const fmtMax = formatMetricVal(maxMetricVal);
+                const fmtAvg = formatMetricVal(avgMetricVal);
+
+                const missingCount = lastApiResponse.column_profiling ? (lastApiResponse.column_profiling.find(c => c.column_key === dim && c.missing_count > 0)?.missing_count || 0) : 0;
+                const totalRows = lastApiResponse.dataset_meta?.total_rows || records.length;
+
+                let strategicAdvice = "";
+                if (isCurrency && (metricLower.includes('doanh thu') || metricLower.includes('revenue'))) {
+                    strategicAdvice = `Nhóm "<b>${topGroup.name}</b>" đóng vai trò động lực tăng trưởng cốt lõi. Khuyến nghị duy trì năng lực phục vụ tại nhóm này và thiết kế chiến dịch kích cầu đối ứng cho "<b>${bottomGroup.name}</b>".`;
+                } else if (metricLower.includes('chi phí') || metricLower.includes('cost') || metricLower.includes('cogs')) {
+                    strategicAdvice = `Nhóm "<b>${topGroup.name}</b>" đang chiếm tỷ trọng chi phí cao nhất. Cần rà soát các hợp đồng nhà cung cấp hoặc tiêu thức phân bổ chiết khấu để bảo vệ biên lợi nhuận ròng.`;
+                } else {
+                    strategicAdvice = `Mức độ tập trung của "<b>${metricLabel}</b>" dồn về "<b>${topGroup.name}</b>". Khuyến nghị mở rộng đối tượng mục tiêu để tránh rủi ro phụ thuộc vào một phân khúc đơn lẻ.`;
+                }
+
+                insightsContainer.innerHTML = `
+                    <div class="space-y-2">
+                        <p class="leading-relaxed">
+                            <i class="fa-solid fa-crown text-amber-500 mr-1.5"></i>
+                            Nhóm "<b>${topGroup.name}</b>" dẫn đầu về ${aggLabels[agg]} của "<b>${metricLabel}</b>" đạt <b>${formattedTop}</b>${sharePct ? ` (chiếm <b>${sharePct}%</b> tổng quy mô toàn bộ ${groupResults.length} nhóm)` : ''}.
+                        </p>
+                        <p class="leading-relaxed">
+                            <i class="fa-solid fa-chart-line text-emerald-600 mr-1.5"></i>
+                            Biên độ phân tán từ <b>${fmtMin}</b> đến <b>${fmtMax}</b>, giá trị trung bình là <b>${fmtAvg}</b>.${ratioDiff ? ` Nhóm dẫn đầu gấp <b>${ratioDiff} lần</b> so với nhóm thấp nhất ("${bottomGroup.name}").` : ''}
+                        </p>
+                        <p class="leading-relaxed">
+                            <i class="fa-solid fa-brain text-indigo-600 mr-1.5"></i>
+                            <b>Nhận định AI:</b> ${strategicAdvice}
+                        </p>
+                        <p class="leading-relaxed text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
+                            <i class="fa-solid fa-shield-check ${missingCount > 0 ? 'text-amber-500' : 'text-emerald-500'} mr-1.5"></i>
+                            ${missingCount > 0 ? `Lưu ý chất lượng dữ liệu: Còn <b>${missingCount}</b> ô trống ở cột "${dimLabel}" (${((missingCount/totalRows)*100).toFixed(1)}% tệp).` : `Độ tin cậy dữ liệu: <b>100%</b> bản ghi phân loại hợp lệ, không có ô trống.`}
+                        </p>
+                    </div>
+                `;
+            }
+
+            const deepBox = document.getElementById('aiSliceDeepInsightContainer');
+            if (deepBox) deepBox.classList.add('hidden');
+        }
+
+        // Tương tác trực tiếp với Google Gemini AI để phân tích sâu lát cắt dữ liệu
+        async function askAiToAnalyzeSlice() {
+            if (!lastApiResponse || !lastApiResponse.dataset_meta?.total_rows) {
+                showToast("Vui lòng tải tệp dữ liệu lên trước khi hỏi AI.", "warning");
+                return;
+            }
+            const dimSelectEl = document.getElementById('grpDimSelect');
+            const dimLabel = (dimSelectEl && dimSelectEl.options[dimSelectEl.selectedIndex]?.text) || 'Nhóm';
+            const metricSelectEl = document.getElementById('grpMetricSelect');
+            const metricLabel = (metricSelectEl && metricSelectEl.options[metricSelectEl.selectedIndex]?.text) || 'Chỉ số';
+            const aggSelectEl = document.getElementById('grpAggSelect');
+            const aggLabel = (aggSelectEl && aggSelectEl.options[aggSelectEl.selectedIndex]?.text) || 'Tổng';
+
+            const btn = document.getElementById('btnAiAnalyzeSlice');
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-indigo-500"></i> <span>Gemini AI đang nhận xét...</span>`;
+            }
+
+            const prompt = `Phân tích chuyên sâu lát cắt dữ liệu: Nhóm theo '${dimLabel}', Phép tổng hợp '${aggLabel}', Cột số '${metricLabel}'. Dựa trên kết quả thực tế, hãy đưa ra 3 nhận xét chiến lược sắc bén và 2 khuyến nghị cụ thể cho Ban giám đốc.`;
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: prompt })
+                });
+                const data = await res.json();
+                const reply = data.reply || data.error || 'AI đã phân tích xong lát cắt dữ liệu.';
+
+                const deepBox = document.getElementById('aiSliceDeepInsightContainer');
+                const deepText = document.getElementById('aiSliceDeepInsightText');
+                if (deepBox && deepText) {
+                    deepText.innerHTML = reply.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+                    deepBox.classList.remove('hidden');
+                    deepBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+                showToast("✨ Gemini AI đã hoàn thành nhận định lát cắt!", "success");
+            } catch (err) {
+                console.error("AI Slice Error:", err);
+                showToast("Không thể kết nối Gemini AI. Vui lòng thử lại sau.", "error");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            }
+        }
+
+        function renderColumnProfilingTable() {
+            if (!lastApiResponse) return;
+            const format = document.getElementById('numberFormatSelect')?.value || 'vi';
+            const tbody = document.getElementById('columnProfilingTableBody');
+            if (!tbody) return;
+
+            const cols = lastApiResponse.column_profiling || [];
+            if (!cols.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-10 text-center text-slate-400 italic">
+                            <i class="fa-solid fa-table-columns text-2xl text-slate-300 block mb-2"></i>
+                            Chưa có dữ liệu. Vui lòng tải tệp ở Bước 1 để AI nhận diện kiểu dữ liệu và thống kê chi tiết từng cột.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const formatNum = (num) => {
+                if (num === null || num === undefined || isNaN(num)) return '—';
+                if (format === 'en') {
+                    return Number(num).toLocaleString('en-US', { minimumFractionDigits: num % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 });
+                } else {
+                    return Number(num).toLocaleString('vi-VN', { minimumFractionDigits: num % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 });
+                }
+            };
+
+            tbody.innerHTML = cols.map(c => `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs">
+                    <td class="py-3 px-3.5 font-bold text-slate-900">${c.column_name}</td>
+                    <td class="py-3 px-3.5 text-slate-600">${c.data_type}</td>
+                    <td class="py-3 px-3.5 text-center font-mono ${c.missing_count > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">${c.missing_count}</td>
+                    <td class="py-3 px-3.5 text-center font-mono font-bold text-slate-700">${c.unique_count}</td>
+                    <td class="py-3 px-3.5 text-right font-mono ${c.mean !== null ? 'text-slate-800' : 'text-slate-300'}">${c.mean !== null ? formatNum(c.mean) : '—'}</td>
+                    <td class="py-3 px-3.5 text-right font-mono ${c.min !== null ? 'text-slate-800' : 'text-slate-300'}">${c.min !== null ? formatNum(c.min) : '—'}</td>
+                    <td class="py-3 px-3.5 text-right font-mono ${c.max !== null ? 'text-slate-900 font-bold' : 'text-slate-300'}">${c.max !== null ? formatNum(c.max) : '—'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function submitAnalysisModificationRequest() {
+            const input = document.getElementById('analysisStepModificationInput');
+            const alertBox = document.getElementById('analysisModificationAlert');
+            const alertText = document.getElementById('analysisModificationAlertText');
+            const val = input ? input.value.trim() : '';
+
+            if (!val) {
+                if (alertBox) alertBox.classList.remove('hidden');
+                if (alertText) alertText.innerText = 'Chưa thể tạo bản sửa. Vui lòng nhập nội dung đề xuất điều chỉnh trước khi gửi.';
+                return;
+            }
+
+            if (alertBox) alertBox.classList.add('hidden');
+            showToast(`✨ Đã ghi nhận yêu cầu: "${val}". AI Copilot đang áp dụng phân tích...`, "success");
+            
+            const noteEl = document.getElementById('hitlSignoffNote');
+            if (noteEl) {
+                noteEl.value = (noteEl.value ? noteEl.value + '\n' : '') + `[Yêu cầu sửa từ Bước 3]: ${val}`;
+            }
+
+            setTimeout(() => {
+                const target = document.getElementById('groupBarsContainer');
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        }
+
+        function clearAnalysisModificationRequest() {
+            const input = document.getElementById('analysisStepModificationInput');
+            if (input) input.value = '';
+            const alertBox = document.getElementById('analysisModificationAlert');
+            if (alertBox) alertBox.classList.add('hidden');
+            showToast('Đã bỏ yêu cầu chỉnh sửa.', 'info');
+        }
+
+        function confirmAndProceedToStep4() {
+            showToast('🚀 Đã xác nhận phân tích! Chuyển sang Bước 4: Duyệt & Xuất Báo Cáo...', 'success');
+            goToStep(4);
+        }
+
+        // Modals
+        function openFaqModal() { document.getElementById('modalFaq').classList.remove('hidden'); }
+        function closeFaqModal() { document.getElementById('modalFaq').classList.add('hidden'); }
+        function openContactModal() { document.getElementById('modalContact').classList.remove('hidden'); }
+        function closeContactModal() { document.getElementById('modalContact').classList.add('hidden'); }
+        function openSettingsModal() { document.getElementById('modalSettings').classList.remove('hidden'); }
+        function closeSettingsModal() { document.getElementById('modalSettings').classList.add('hidden'); }
+        function saveSettingsAndApply() {
+            closeSettingsModal();
+            showToast("⚙️ Đã lưu tham số đánh giá P&L mới!");
+            if (uploadedFileBase64 || currentScenario) {
+                fetchBackendPipeline();
+            }
+        }
+
+        // ==========================================
+        // SIDEBAR TOGGLE (ẨN/HIỆN & DI CHUYỂN RA VÀO)
+        // ==========================================
+        let isSidebarCollapsed = false;
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('appSidebar');
+            const icon = document.getElementById('sidebarToggleIcon');
+            const sidebarTexts = document.querySelectorAll('.sidebar-text');
+            const sideBtns = document.querySelectorAll('.side-btn');
+            
+            if (!sidebar) return;
+            isSidebarCollapsed = !isSidebarCollapsed;
+
+            if (isSidebarCollapsed) {
+                sidebar.classList.remove('w-64', 'px-4');
+                sidebar.classList.add('w-20', 'px-2.5');
+                sidebarTexts.forEach(el => el.classList.add('hidden'));
+                sideBtns.forEach(btn => btn.classList.add('justify-center', '!px-2'));
+                if (icon) {
+                    icon.classList.remove('fa-chevron-left');
+                    icon.classList.add('fa-chevron-right');
+                }
+                showToast("Thanh công cụ đã được thu gọn.", "info");
+            } else {
+                sidebar.classList.remove('w-20', 'px-2.5');
+                sidebar.classList.add('w-64', 'px-4');
+                sidebarTexts.forEach(el => el.classList.remove('hidden'));
+                sideBtns.forEach(btn => btn.classList.remove('justify-center', '!px-2'));
+                if (icon) {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-left');
+                }
+                showToast("Thanh công cụ đã được mở rộng.", "info");
+            }
+        }
+
+        // ==========================================
+        // USER FEEDBACK & BUG REPORT MODAL
+        // ==========================================
+        function openFeedbackModal() {
+            const modal = document.getElementById('feedbackModal');
+            if (!modal) return;
+            const badge = document.getElementById('feedbackCurrentStepBadge');
+            if (badge) {
+                badge.innerText = `Bước ${currentStepNumber || 1}`;
+            }
+            loadRecentFeedbacks();
+            modal.classList.remove('hidden');
+        }
+
+        function closeFeedbackModal() {
+            const modal = document.getElementById('feedbackModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function submitUserFeedback(event) {
+            event.preventDefault();
+            const form = event.target;
+            const type = form.querySelector('input[name="feedbackType"]:checked')?.value || 'bug';
+            const author = document.getElementById('feedbackAuthor')?.value.trim() || 'Người dùng ẩn danh';
+            const title = document.getElementById('feedbackTitle')?.value.trim() || '';
+            const content = document.getElementById('feedbackContent')?.value.trim() || '';
+            const step = currentStepNumber || 1;
+
+            if (!title || !content) {
+                showToast("⚠️ Vui lòng điền tiêu đề và nội dung phản hồi!", "warning");
+                return;
+            }
+
+            const feedbackItem = {
+                id: 'FB-' + Date.now().toString().slice(-6),
+                type,
+                author,
+                title,
+                content,
+                step: `Bước ${step}`,
+                createdAt: new Date().toLocaleString('vi-VN')
+            };
+
+            let feedbacks = [];
+            try {
+                feedbacks = JSON.parse(localStorage.getItem('thuha_user_feedbacks') || '[]');
+            } catch (e) {
+                feedbacks = [];
+            }
+            feedbacks.unshift(feedbackItem);
+            localStorage.setItem('thuha_user_feedbacks', JSON.stringify(feedbacks.slice(0, 30)));
+
+            form.reset();
+            showToast("🎉 Cảm ơn bạn! Phản hồi & báo lỗi đã được gửi thành công đến Thu Hà Studio.", "success");
+            loadRecentFeedbacks();
+        }
+
+        function loadRecentFeedbacks() {
+            const container = document.getElementById('recentFeedbacksContainer');
+            const list = document.getElementById('recentFeedbacksList');
+            if (!container || !list) return;
+
+            let feedbacks = [];
+            try {
+                feedbacks = JSON.parse(localStorage.getItem('thuha_user_feedbacks') || '[]');
+            } catch (e) {
+                feedbacks = [];
+            }
+
+            if (feedbacks.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            const typeLabels = {
+                'bug': '🐞 Lỗi hệ thống',
+                'feature': '💡 Đề xuất tính năng',
+                'chart': '📊 Biểu đồ & P&L',
+                'other': '⭐ Góp ý khác'
+            };
+
+            list.innerHTML = feedbacks.slice(0, 5).map(fb => `
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex flex-col gap-1">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-[#203833]">${fb.title}</span>
+                        <span class="text-[10px] text-slate-400">${fb.createdAt}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 line-clamp-2">${fb.content}</p>
+                    <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                        <span class="px-2 py-0.5 rounded-md bg-[#B8D9D3]/50 text-[#203833] font-semibold">${typeLabels[fb.type] || fb.type}</span>
+                        <span>${fb.step}</span>
+                        <span>• Bởi: ${fb.author}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Khởi động trang với trạng thái sạch, KHÔNG nạp số liệu mẫu ban đầu
+        window.addEventListener('DOMContentLoaded', () => {
+            renderEmptyState();
+            goToStep(1);
+
+            ['btnEnterWorkspaceHero', 'btnEnterWorkspaceHeader'].forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        navigateTo('app');
+                    });
+                }
+            });
+        });
+    </script>
+
+    <!-- =================================================================== -->
+    <!-- MODAL 1: HỎI ĐÁP (FAQ) -->
+    <!-- =================================================================== -->
+    <div id="modalFaq" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-floating border border-slate-200 space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-50 text-forshop-sidebar flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-circle-question text-cyan-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-slate-900">Hỏi Đáp Thường Gặp (FAQ)</h3>
+                        <p class="text-xs text-slate-400">Giải đáp quy trình phân tích và công nghệ của Thu Hà</p>
+                    </div>
+                </div>
+                <button onclick="closeFaqModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-600 max-h-[60vh] overflow-y-auto pr-1">
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> 1. Hệ thống hỗ trợ những định dạng file nào?</h4>
+                    <p class="text-slate-600 leading-relaxed">Hỗ trợ đầy đủ: Excel (.xlsx, .xls), CSV (.csv), và liên kết trực tiếp Google Sheets & Lark Base công khai.</p>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> 2. Dữ liệu gốc có bị thay đổi hoặc mất mát không?</h4>
+                    <p class="text-slate-600 leading-relaxed">100% dữ liệu gốc được bảo toàn. Hệ thống chỉ xử lý bản sao và ghi nhận nhật ký kiểm toán (Audit Trail) cho từng thao tác làm sạch.</p>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> 3. Khi nào hệ thống bắt đầu tính toán?</h4>
+                    <p class="text-slate-600 leading-relaxed">Ngay khi bạn tải tệp Excel hoặc CSV lên, hệ thống mới bắt đầu quét các nhóm lỗi làm sạch, khử trùng đa voucher và tính toán toàn bộ 13 chỉ số P&L.</p>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> 4. AI Copilot dùng mô hình gì?</h4>
+                    <p class="text-slate-600 leading-relaxed">Tích hợp Google Gemini 3.5 Flash Lite với tốc độ phản hồi cực nhanh, kết hợp bộ suy luận tài chính nội bộ giúp trả lời chính xác số liệu P&L.</p>
+                </div>
+            </div>
+            <div class="pt-2 text-right">
+                <button onclick="closeFaqModal()" class="px-5 py-2.5 bg-forshop-sidebar hover:bg-forshop-sidebarDark text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer">
+                    Đã hiểu
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- =================================================================== -->
+    <!-- MODAL 2: LIÊN HỆ (CONTACT) -->
+    <!-- =================================================================== -->
+    <div id="modalContact" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-floating border border-slate-200 space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-address-card text-pink-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-slate-900">Liên Hệ • Thu Hà</h3>
+                        <p class="text-xs text-slate-400">Data Analyst & Business Intelligence Specialist</p>
+                    </div>
+                </div>
+                <button onclick="closeContactModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div class="p-3.5 bg-slate-50 rounded-2xl flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-white shadow-xs flex items-center justify-center text-rose-500">
+                        <i class="fa-solid fa-envelope"></i>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-semibold uppercase">Email Chuyên Môn</div>
+                        <a href="mailto:thuha.analyst@gmail.com" class="text-xs font-bold text-slate-800 hover:text-forshop-sidebar">thuha.analyst@gmail.com</a>
+                    </div>
+                </div>
+                <div class="p-3.5 bg-slate-50 rounded-2xl flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-white shadow-xs flex items-center justify-center text-cyan-600">
+                        <i class="fa-solid fa-laptop-code"></i>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-semibold uppercase">Dịch Vụ Cung Cấp</div>
+                        <div class="text-xs font-bold text-slate-800">Tư vấn BI, Xây dựng Dashboard, Phân tích P&L & Tự động hoá AI Agent</div>
+                    </div>
+                </div>
+            </div>
+            <div class="pt-2 flex justify-end gap-2">
+                <button onclick="closeContactModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer">
+                    Đóng
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- =================================================================== -->
+    <!-- MODAL 3: CÀI ĐẶT THAM SỐ (SETTINGS) -->
+    <!-- =================================================================== -->
+    <div id="modalSettings" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-floating border border-slate-200 space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-50 text-forshop-sidebar flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-sliders text-forshop-sidebar"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-slate-900">Cài Đặt Tham Số Đánh Giá</h3>
+                        <p class="text-xs text-slate-400">Cấu hình ngưỡng kinh doanh và quy tắc tính P&L</p>
+                    </div>
+                </div>
+                <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Kỳ vọng Biên đóng góp tối thiểu (CM %):</label>
+                    <input type="number" id="settingTargetCM" value="15" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-forshop-sidebar">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Tỷ lệ hoàn hàng tối đa cho phép (%):</label>
+                    <input type="number" id="settingMaxReturn" value="12" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-forshop-sidebar">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Quy tắc khử trùng đơn đa Voucher:</label>
+                    <select id="settingMultiTouch" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-forshop-sidebar">
+                        <option value="PROPORTIONAL" selected>PROPORTIONAL (Theo tỷ lệ chiết khấu)</option>
+                        <option value="EQUAL_SPLIT">EQUAL_SPLIT (Chia đều)</option>
+                        <option value="FIRST_TOUCH">FIRST_TOUCH (Voucher đầu tiên)</option>
+                        <option value="LAST_TOUCH">LAST_TOUCH (Voucher cuối cùng)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="pt-2 flex justify-end gap-2">
+                <button onclick="closeSettingsModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer">
+                    Hủy
+                </button>
+                <button onclick="saveSettingsAndApply()" class="btn-smooth px-5 py-2.5 bg-forshop-sidebar hover:bg-forshop-sidebarDark text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer">
+                    Lưu & Áp Dụng
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- =================================================================== -->
+    <!-- MODAL 4: AI SMART ANGLES CONTROLLER (ĐIỀU HƯỚNG PHÂN TÍCH ĐA CHIỀU) -->
+    <!-- =================================================================== -->
+    <div id="modalAiSmartAnalysis" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 max-h-[90vh] overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-3.5 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white flex items-center justify-center text-lg shadow-md shadow-indigo-200">
+                        <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                            AI Smart Dimensions • Trung Tâm Kích Hoạt Phân Tích
+                        </h3>
+                        <p class="text-xs text-slate-500">Tự động nhận diện cấu trúc dữ liệu và điều hướng góc nhìn phân tích tối ưu</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeAiSmartModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Status Banner -->
+            <div class="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-purple-50/80 to-cyan-50/80 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0"></span>
+                    <span class="font-bold text-indigo-950" id="aiModalStatusText">
+                        AI đã kích hoạt các góc nhìn phân tích chuyên sâu cho tập dữ liệu hiện tại
+                    </span>
+                </div>
+                <span class="px-2.5 py-1 rounded-xl bg-white shadow-2xs text-indigo-800 font-extrabold text-[11px] shrink-0 border border-indigo-200 self-start sm:self-auto" id="aiModalActiveBadge">
+                    Đang kích hoạt
+                </span>
+            </div>
+
+            <!-- List of 4 Dimensions Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5" id="aiModalCardsContainer">
+                <!-- Dynamically populated via renderAiSmartModalContent() -->
+            </div>
+
+            <!-- Bottom Actions -->
+            <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="text-[11px] text-slate-400 flex items-center gap-1.5 self-start sm:self-auto">
+                    <i class="fa-solid fa-circle-info text-cyan-600"></i>
+                    Nhấp góc nhìn bất kỳ để xem ngay báo cáo & biểu đồ tương ứng.
+                </div>
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <button type="button" onclick="closeAiSmartModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer">
+                        Đóng
+                    </button>
+                    <button type="button" onclick="runAiOverviewNow()" class="btn-smooth px-5 py-2.5 bg-gradient-to-r from-forshop-sidebar to-indigo-600 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2">
+                        <i class="fa-solid fa-table-cells-large"></i>
+                        <span>Xem Lưới 4 Biểu Đồ Toàn Cảnh</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- =================================================================== -->
+    <!-- MODAL PHẢN HỒI & BÁO LỖI NGƯỜI DÙNG (USER FEEDBACK MODAL) -->
+    <!-- =================================================================== -->
+    <div id="feedbackModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border-2 border-[#75BFB2] space-y-5 animate-scaleIn max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-[#203833] text-[#75BFB2] flex items-center justify-center font-bold text-lg shadow-md">
+                        <i class="fa-solid fa-comment-dots text-[#75BFB2]"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-[#203833]">Góp Ý & Báo Lỗi Hệ Thống</h3>
+                        <p class="text-[11px] text-slate-500">Phản hồi của bạn giúp hoàn thiện AI Studio của Thu Hà</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeFeedbackModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Feedback Form -->
+            <form id="userFeedbackForm" onsubmit="submitUserFeedback(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-[#203833] mb-1.5">Loại phản hồi <span class="text-[#D991A4]">*</span></label>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 font-medium">
+                            <input type="radio" name="feedbackType" value="bug" checked class="accent-[#75BFB2]">
+                            <span>🐞 Báo lỗi hệ thống</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 font-medium">
+                            <input type="radio" name="feedbackType" value="feature" class="accent-[#75BFB2]">
+                            <span>💡 Đề xuất tính năng</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 font-medium">
+                            <input type="radio" name="feedbackType" value="chart" class="accent-[#75BFB2]">
+                            <span>📊 Biểu đồ & Chỉ số P&L</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 font-medium">
+                            <input type="radio" name="feedbackType" value="other" class="accent-[#75BFB2]">
+                            <span>⭐ Góp ý khác</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-[#203833] mb-1">Tên hoặc Email người gửi (tùy chọn)</label>
+                    <input type="text" id="feedbackAuthor" placeholder="Ví dụ: Nguyễn Văn A hoặc user@example.com" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#75BFB2] focus:ring-2 focus:ring-[#75BFB2]/20">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-[#203833] mb-1">Tiêu đề phản hồi <span class="text-[#D991A4]">*</span></label>
+                    <input type="text" id="feedbackTitle" required placeholder="Tóm tắt ngắn gọn vấn đề hoặc đề xuất..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#75BFB2] focus:ring-2 focus:ring-[#75BFB2]/20 font-semibold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-[#203833] mb-1">Mô tả chi tiết <span class="text-[#D991A4]">*</span></label>
+                    <textarea id="feedbackContent" required rows="4" placeholder="Mô tả cụ thể lỗi gặp phải (ở bước nào, thao tác gì), hoặc gợi ý cải tiến của bạn..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#75BFB2] focus:ring-2 focus:ring-[#75BFB2]/20 resize-none"></textarea>
+                </div>
+
+                <!-- Tự động đính kèm ngữ cảnh hiện tại -->
+                <div class="p-3 bg-[#B8D9D3]/30 rounded-xl border border-[#75BFB2]/40 text-[11px] text-[#203833] flex items-center justify-between">
+                    <span class="flex items-center gap-1.5 font-medium">
+                        <i class="fa-solid fa-info-circle text-[#75BFB2]"></i>
+                        <span>Tự động đính kèm bước hiện tại: <strong id="feedbackCurrentStepBadge">Bước 1</strong></span>
+                    </span>
+                    <span class="font-mono text-[10px] text-slate-500">Auto-Log</span>
+                </div>
+
+                <!-- Nút Gửi -->
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button type="button" onclick="closeFeedbackModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+                        Hủy Bỏ
+                    </button>
+                    <button type="submit" class="btn-smooth px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#203833] to-[#2E544C] hover:from-[#172A26] hover:to-[#24443D] text-white text-xs font-bold flex items-center gap-2 shadow-md cursor-pointer border border-[#75BFB2]/40">
+                        <i class="fa-solid fa-paper-plane text-[#75BFB2]"></i>
+                        <span>Gửi Phản Hồi</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- Danh Sách Phản Hồi Gần Đây Đã Lưu -->
+            <div id="recentFeedbacksContainer" class="pt-3 border-t border-slate-100 hidden">
+                <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Phản Hồi Của Bạn Đã Gửi:
+                </h4>
+                <div id="recentFeedbacksList" class="space-y-2 max-h-36 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Gemini 3.5 Copilot Quick Button -->
+    <button type="button" onclick="openGeminiCopilot()" title="Bấm để mở Cố Vấn Google Gemini 3.5 Flash Lite" class="btn-smooth fixed bottom-6 right-6 z-50 bg-gradient-to-r from-forshop-sidebar via-indigo-600 to-pink-600 hover:scale-105 active:scale-95 text-white px-4 py-3 rounded-full shadow-2xl flex items-center gap-2.5 font-extrabold text-xs cursor-pointer border-2 border-white/80 transition-all group">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <i class="fa-solid fa-wand-magic-sparkles text-cyan-300 text-sm group-hover:rotate-12 transition-transform"></i>
+        <span>Gemini 3.5 Copilot</span>
+    </button>
+</body>
+</html>
