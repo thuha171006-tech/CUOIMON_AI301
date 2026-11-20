@@ -713,7 +713,7 @@
 
                                     <div>
                                         <h4 id="uploadProcessingTitle" class="text-sm font-black text-[#183634]">Đang nạp & phân tích dữ liệu siêu tốc...</h4>
-                                        <p id="uploadProcessingSub" class="text-xs text-[#183634]/80 font-medium mt-0.5">AI đang đọc bảng tính và kiểm tra 5 nhóm lỗi...</p>
+                                        <p id="uploadProcessingSub" class="text-xs text-[#183634]/80 font-medium mt-0.5">AI đang đọc bảng tính và quét các nhóm lỗi làm sạch...</p>
                                     </div>
 
                                     <!-- Thanh tiến trình Animated -->
@@ -873,7 +873,7 @@
                     <div id="step2ScanningPulse" class="hidden mb-3 p-3.5 bg-white rounded-2xl border-2 border-emerald-600 shadow-md flex items-center justify-between animate-pulse">
                         <div class="flex items-center gap-2.5">
                             <i class="fa-solid fa-circle-notch fa-spin text-emerald-600 text-sm"></i>
-                            <span class="text-xs font-black text-[#0f172a]" id="step2ScanStatusText">Đang rà soát 5 nhóm lỗi (Format, Ô trống, Trùng lặp, Voucher, COGS)...</span>
+                            <span class="text-xs font-black text-[#0f172a]" id="step2ScanStatusText">Đang rà soát các nhóm lỗi dữ liệu (Format, Ô trống, Trùng lặp, Voucher, COGS)...</span>
                         </div>
                         <span class="text-[10px] font-black px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs">AI SCANNER</span>
                     </div>
@@ -2497,11 +2497,23 @@
             const btnProceed = document.getElementById('btnProceedToStep3');
             const pulse = document.getElementById('step2ScanningPulse');
 
+            const excs = (lastApiResponse && Array.isArray(lastApiResponse.exceptions_list)) ? lastApiResponse.exceptions_list : [];
+            const grouped = (typeof groupCleaningExceptions === 'function') ? groupCleaningExceptions(excs) : [];
+            const grpCount = grouped.length;
+
             if (pulse) {
                 pulse.classList.remove('hidden');
                 setTimeout(() => {
                     const text = document.getElementById('step2ScanStatusText');
-                    if (text) text.innerHTML = "✔ Đã quét xong 5 nhóm lỗi. Vui lòng rà soát và phê duyệt hướng giải quyết bên dưới.";
+                    if (text) {
+                        if (hasApprovedCleaning) {
+                            text.innerHTML = `✔ Đã hoàn tất phê duyệt ${grpCount > 0 ? grpCount + ' nhóm lỗi' : 'làm sạch'}. Bảng dữ liệu sạch đã sẵn sàng cho Bước 3.`;
+                        } else if (grpCount === 0) {
+                            text.innerHTML = "✔ Đã quét xong (0 nhóm lỗi). Dữ liệu đạt chuẩn 100%, không phát hiện lỗi cần xử lý.";
+                        } else {
+                            text.innerHTML = `✔ Đã quét xong ${grpCount} nhóm lỗi. Vui lòng rà soát và phê duyệt hướng giải quyết bên dưới.`;
+                        }
+                    }
                 }, 700);
             }
 
@@ -3120,6 +3132,7 @@
             uploadedFileName = file.name;
             currentScenario = null;
             isDemoMode = false;
+            hasApprovedCleaning = false;
 
             // 1. Hiển thị chức năng quay tròn (Spinner) ngay lập tức
             showUploadLoader(file.name);
@@ -3130,7 +3143,7 @@
                 lastApiResponse = null;
 
                 updateStep1FileUI(file.name, file.size);
-                setUploadProgress(70, "Đang bóc tách P&L và kiểm tra 5 nhóm lỗi...");
+                setUploadProgress(70, "Đang bóc tách P&L và rà soát các nhóm lỗi...");
 
                 try {
                     // Chạy pipeline xử lý dữ liệu siêu tốc (< 100ms)
@@ -6603,6 +6616,10 @@
                 if (step2Status) {
                     step2Status.innerHTML = `<i class="fa-solid fa-shield-halved text-[#c5dedd] mr-1"></i> Dữ Liệu Sạch Hoàn Hảo`;
                 }
+                const text = document.getElementById('step2ScanStatusText');
+                if (text) {
+                    text.innerHTML = "✔ Đã quét xong (0 nhóm lỗi). Dữ liệu đạt chuẩn 100%, không phát hiện lỗi cần xử lý.";
+                }
 
                 container.innerHTML = `
                     <div class="p-6 bg-[#c5dedd]/30 border border-[#c5dedd] rounded-2xl flex items-center gap-3.5">
@@ -6619,6 +6636,16 @@
             }
 
             const groupedErrors = groupCleaningExceptions(exceptions);
+            const grpCount = groupedErrors.length;
+
+            const text = document.getElementById('step2ScanStatusText');
+            if (text) {
+                if (hasApprovedCleaning) {
+                    text.innerHTML = `✔ Đã hoàn tất phê duyệt ${grpCount} nhóm lỗi. Bảng dữ liệu sạch đã sẵn sàng cho Bước 3.`;
+                } else {
+                    text.innerHTML = `✔ Đã quét xong ${grpCount} nhóm lỗi. Vui lòng rà soát và phê duyệt hướng giải quyết bên dưới.`;
+                }
+            }
 
             if (errBadge) {
                 errBadge.innerText = `${groupedErrors.length} Nhóm lỗi (${exceptions.length} vị trí dữ liệu đã được AI xử lý sạch)`;
@@ -6707,6 +6734,15 @@
                 verifyBadge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> ĐÃ PHÊ DUYỆT LÀM SẠCH`;
             }
 
+            // 3b. Scanner status text update
+            const statusText = document.getElementById('step2ScanStatusText');
+            if (statusText) {
+                const excs = (lastApiResponse && Array.isArray(lastApiResponse.exceptions_list)) ? lastApiResponse.exceptions_list : [];
+                const grouped = (typeof groupCleaningExceptions === 'function') ? groupCleaningExceptions(excs) : [];
+                const grpCount = grouped.length;
+                statusText.innerHTML = `✔ Đã hoàn tất phê duyệt ${grpCount > 0 ? grpCount + ' nhóm lỗi' : 'làm sạch'}. Bảng dữ liệu sạch đã sẵn sàng cho Bước 3.`;
+            }
+
             // 4. Reveal cleaned data table and hide pending box
             const pendingBox = document.getElementById('cleanedDataPendingBox');
             if (pendingBox) pendingBox.classList.add('hidden');
@@ -6752,6 +6788,19 @@
             if (verifyBadge) {
                 verifyBadge.className = "px-3 py-1 rounded-full text-[11px] font-bold bg-[#fde2e4] text-[#872D43] border border-[#fad2e1]";
                 verifyBadge.innerHTML = `<i class="fa-solid fa-sliders text-[#872D43] mr-1"></i> Đang Tùy Chỉnh Lại`;
+            }
+
+            // 3b. Reset scanner status text
+            const revertStatusText = document.getElementById('step2ScanStatusText');
+            if (revertStatusText) {
+                const excs = (lastApiResponse && Array.isArray(lastApiResponse.exceptions_list)) ? lastApiResponse.exceptions_list : [];
+                const grouped = (typeof groupCleaningExceptions === 'function') ? groupCleaningExceptions(excs) : [];
+                const grpCount = grouped.length;
+                if (grpCount === 0) {
+                    revertStatusText.innerHTML = "✔ Đã quét xong (0 nhóm lỗi). Dữ liệu đạt chuẩn 100%, không phát hiện lỗi cần xử lý.";
+                } else {
+                    revertStatusText.innerHTML = `✔ Đã quét xong ${grpCount} nhóm lỗi. Vui lòng rà soát và phê duyệt hướng giải quyết bên dưới.`;
+                }
             }
 
             // 4. Show pending box, hide table wrapper
@@ -7072,76 +7121,6 @@
                 }
             }
 
-            currentHumanOverrides = { ...currentHumanOverrides, ...overrides };
-            return overrides;
-        }
-
-        function getDynamicOverheadMethod() {
-            const el = document.getElementById('hitlOverheadMethod');
-            return el ? el.value : 'REVENUE_SHARE';
-        }
-
-        function getDynamicMultiTouchRule() {
-            return 'PROPORTIONAL';
-        }
-
-        async function applyHumanControlOverrides() {
-            showToast('✨ Đã ghi nhận tùy chọn can thiệp! Đang tính toán lại báo cáo P&L theo thông số mới...', 'info');
-            const overrides = getDynamicHumanOverrides();
-            const overheadMethod = getDynamicOverheadMethod();
-            await fetchBackendPipeline({
-                human_overrides: overrides,
-                overhead_method: overheadMethod
-            });
-            showToast('✅ Báo cáo P&L đã được tính toán lại thành công theo các tùy chọn can thiệp của bạn!', 'success');
-        }
-
-        let currentCleanedRecords = [];
-        let isShowAllCleanedRows = false;
-
-        // Render Cleaned Data Preview Table (Show 50 rows by default, expandable with Show button)
-        function renderCleanedDataTable(records) {
-            window.renderCleanedOrdersTable = renderCleanedDataTable;
-            const tbody = document.getElementById('cleanedDataTableBody');
-            const countBadge = document.getElementById('badgeCleanedRecordsCount');
-            const paginationBar = document.getElementById('cleanedDataPaginationBar');
-            const showingCountEl = document.getElementById('showingRowCount');
-            const totalCountEl = document.getElementById('totalRowCount');
-            const btnToggle = document.getElementById('btnToggleShowAllCleaned');
-            if (!tbody) return;
-
-            if (records !== undefined) {
-                currentCleanedRecords = records || [];
-                isShowAllCleanedRows = false;
-            }
-
-            const data = currentCleanedRecords || [];
-
-            if (!data || !data.length) {
-                if (countBadge) countBadge.innerText = "0 Bản Ghi";
-                if (paginationBar) paginationBar.classList.add('hidden');
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="20" class="py-10 text-center text-slate-400 italic font-medium">
-                            <i class="fa-solid fa-file-excel text-2xl text-slate-300 block mb-2"></i>
-                            Chưa có dữ liệu làm sạch. Tải tệp ở Bước 1 để hiển thị dữ liệu mới tại đây.
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            const totalRows = data.length;
-            if (countBadge) {
-                countBadge.innerText = `${totalRows} Dòng Dữ Liệu Đã Làm Sạch`;
-            }
-
-            // 1. Determine exact display columns from original file
-            let displayCols = (lastApiResponse && lastApiResponse.dataset_meta && lastApiResponse.dataset_meta.original_columns) || [];
-            
-            // If original_columns not found, dynamically extract from first record excluding system internal keys
-            if (!displayCols || !displayCols.length) {
-                const sysInternalKeys = new Set([
                     'stt', 'cleaning_status', 'attribution_note', 'attributed_gross', 
                     'attributed_net_rev', 'attributed_return', 'attributed_cogs', 
                     'attributed_discount', 'unit_cogs', 'total_cogs', 'gross_profit', 
@@ -9011,7 +8990,7 @@
                 </div>
                 <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> 3. Khi nào hệ thống bắt đầu tính toán?</h4>
-                    <p class="text-slate-600 leading-relaxed">Ngay khi bạn tải tệp Excel hoặc CSV lên, hệ thống mới bắt đầu quét 5 nhóm lỗi làm sạch, khử trùng đa voucher và tính toán toàn bộ 13 chỉ số P&L.</p>
+                    <p class="text-slate-600 leading-relaxed">Ngay khi bạn tải tệp Excel hoặc CSV lên, hệ thống mới bắt đầu quét các nhóm lỗi làm sạch, khử trùng đa voucher và tính toán toàn bộ 13 chỉ số P&L.</p>
                 </div>
                 <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <h4 class="font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> 4. AI Copilot dùng mô hình gì?</h4>
