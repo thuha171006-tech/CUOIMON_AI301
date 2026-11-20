@@ -228,7 +228,7 @@
         <!-- =================================================================== -->
         <!-- SIGNATURE DEEP TEAL SIDEBAR (CÓ NÚT ẨN/HIỆN & DI CHUYỂN RA VÀO) -->
         <!-- =================================================================== -->
-        <aside id="appSidebar" class="w-64 bg-[#e6f4f2] text-[#0f172a] flex flex-col justify-between py-6 px-4 shrink-0 shadow-lg relative border-r-2 border-[#b0d2d0] transition-all duration-300 ease-in-out select-none">
+        <aside id="appSidebar" style="display:none;" class="w-64 bg-[#e6f4f2] text-[#0f172a] flex flex-col justify-between py-6 px-4 shrink-0 shadow-lg relative border-r-2 border-[#b0d2d0] transition-all duration-300 ease-in-out select-none">
             
             <!-- Nút Ẩn/Hiện (Thu Gọn / Mở Rộng) Thanh Công Cụ -->
             <button type="button" onclick="toggleSidebar()" id="sidebarToggleBtn" title="Thu gọn / Mở rộng thanh công cụ" class="absolute -right-3.5 top-7 w-7 h-7 rounded-full bg-white border-2 border-[#c5dedd] text-[#183634] hover:bg-[#c5dedd] flex items-center justify-center shadow-md cursor-pointer z-40 transition transform hover:scale-110">
@@ -359,8 +359,8 @@
             <!-- =================================================================== -->
             <section class="bg-white rounded-2xl p-4 border-2 border-[#fad2e1] flex flex-col lg:flex-row items-center justify-between gap-3 shadow-sm">
                 <div class="flex items-center gap-2 shrink-0">
-                    <button type="button" onclick="toggleSidebar()" class="p-2 rounded-xl bg-white border border-[#c5dedd] text-[#183634] hover:bg-[#c5dedd]/40 cursor-pointer shadow-xs transition shrink-0" title="Ẩn / Hiện thanh công cụ bên trái">
-                        <i class="fa-solid fa-bars text-sm"></i>
+                    <button type="button" onclick="toggleSidebar()" class="p-2 rounded-xl bg-white border border-[#c5dedd] text-[#183634] hover:bg-[#c5dedd]/40 cursor-pointer shadow-xs transition shrink-0" title="Bấm để hiện / ẩn thanh công cụ">
+                        <i class="fa-solid fa-bars text-sm sidebar-menu-toggle-icon"></i>
                     </button>
                     <span class="text-xs font-black uppercase tracking-wider text-[#183634] flex items-center gap-1.5">
                         <i class="fa-solid fa-network-wired text-[#5eaba0]"></i> Luồng Phân Tích:
@@ -2162,15 +2162,15 @@
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="text-xs font-black text-slate-800 uppercase tracking-wider">Lọc Cấp Độ:</span>
-                            <button type="button" onclick="filterAuditLevel('ALL')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-[#c5dedd] text-[#183634]">Tất cả</button>
-                            <button type="button" onclick="filterAuditLevel('INFO')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd]">INFO</button>
-                            <button type="button" onclick="filterAuditLevel('WARNING')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-[#fde2e4] text-[#872D43] border border-[#fad2e1]">WARNING</button>
-                            <button type="button" onclick="filterAuditLevel('ACTION_REQUIRED')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">ACTION</button>
+                            <button type="button" data-audit-filter="ALL" onclick="filterAuditLevel('ALL')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-[#c5dedd] text-[#183634]">Tất cả</button>
+                            <button type="button" data-audit-filter="INFO" onclick="filterAuditLevel('INFO')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd]">INFO</button>
+                            <button type="button" data-audit-filter="WARNING" onclick="filterAuditLevel('WARNING')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-[#fde2e4] text-[#872D43] border border-[#fad2e1]">WARNING</button>
+                            <button type="button" data-audit-filter="ACTION_REQUIRED" onclick="filterAuditLevel('ACTION_REQUIRED')" class="btn-smooth px-3 py-1 rounded-lg text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">ACTION</button>
                         </div>
-                        <div class="relative sm:w-72">
+                        <div class="flex items-center gap-2"><button type="button" onclick="exportAuditTrailCsv()" class="btn-smooth px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd] hover:bg-[#c5dedd]"><i class="fa-solid fa-file-csv mr-1"></i>Xuất CSV</button><button type="button" onclick="clearAuditTrail()" class="btn-smooth px-3 py-1.5 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"><i class="fa-solid fa-trash mr-1"></i>Xóa</button><div class="relative sm:w-72">
                             <input type="text" id="logFilter" onkeyup="filterLogs()" placeholder="Tìm kiếm nhật ký..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-[#c5dedd]">
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
-                        </div>
+                        </div></div>
                     </div>
 
                     <div class="overflow-x-auto rounded-2xl border border-slate-200">
@@ -2270,6 +2270,427 @@
         const PASTEL_PALETTE = ['#72efdd', '#f4978e', '#a0c4ff', '#fed9b7', '#d8b4e2', '#80ed99', '#ffc6ff', '#f3c68f', '#48cae4', '#bdb2ff'];
         const PASTEL_BORDERS = ['#0d9488', '#e11d48', '#0284c7', '#d97706', '#9333ea', '#059669', '#db2777', '#ca8a04', '#0891b2', '#4f46e5'];
 
+
+        
+        // ===================================================================
+        // BỘ CÔNG CỤ TÙY BIẾN BIỂU ĐỒ & CHỈ SỐ THEO NHU CẦU (CUSTOM CHART BUILDER)
+        // ===================================================================
+        let userCustomChartInstance = null;
+        let activeUserCustomChart = null;
+        let userCustomCharts = [];
+        let step5CustomChartInstances = {};
+
+        function populateCustomChartSelectors(data) {
+            const dimSelect = document.getElementById('customChartDimension');
+            const metricSelect = document.getElementById('customChartMetric');
+            if (!dimSelect || !metricSelect || !data) return;
+
+            const records = data.cleaned_orders_table || [];
+            const metaCols = (data.dataset_meta && data.dataset_meta.original_columns) || [];
+            let allCols = metaCols.length > 0 ? metaCols : (records[0] ? Object.keys(records[0]) : []);
+            const sysExclude = new Set(['stt', 'cleaning_status', 'attribution_note', 'attributed_gross', 'attributed_net_rev', 'attributed_return', 'attributed_cogs', 'attributed_discount']);
+            allCols = allCols.filter(c => !sysExclude.has(c) && !String(c).startsWith('_'));
+
+            if (allCols.length === 0) return;
+
+            const profiling = data.column_profiling || [];
+            const numCols = [];
+            const catCols = [];
+
+            allCols.forEach(col => {
+                const prof = profiling.find(p => p.column_name === col || p.column_key === col);
+                if (prof) {
+                    if (prof.data_type && prof.data_type.startsWith('Số')) {
+                        numCols.push(col);
+                    } else {
+                        catCols.push(col);
+                    }
+                } else {
+                    const sample = records.slice(0, 10).map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
+                    const isNum = sample.length > 0 && sample.every(v => !isNaN(Number(String(v).replace(/[%,đVND\s]/g, '').replace(',', '.'))));
+                    if (isNum) numCols.push(col);
+                    else catCols.push(col);
+                }
+            });
+
+            // Populate Dimension select
+            const dimOptions = catCols.length > 0 ? catCols : allCols;
+            dimSelect.innerHTML = dimOptions.map((c, i) => `<option value="${c}" ${i === 0 ? 'selected' : ''}>${c}</option>`).join('');
+
+            // Populate Metric select
+            const metricOptions = numCols.length > 0 ? numCols : allCols;
+            metricSelect.innerHTML = metricOptions.map((c, i) => `<option value="${c}" ${i === 0 ? 'selected' : ''}>${c}</option>`).join('') + `<option value="__COUNT__">Số lượng bản ghi (Đếm dòng / Records)</option>`;
+
+            autoUpdateCustomChartTitle();
+        }
+
+        function autoUpdateCustomChartTitle() {
+            const dim = document.getElementById('customChartDimension')?.value || 'channel';
+            const metric = document.getElementById('customChartMetric')?.value || 'net_revenue';
+            const dimNames = {
+                'channel': 'Kênh Bán Hàng',
+                'product': 'Cơ Cấu Sản Phẩm',
+                'timeline': 'Dòng Thời Gian',
+                'campaign': 'Chiến Dịch'
+            };
+            const metricNames = {
+                'net_revenue': 'Doanh Thu Thuần',
+                'gross_revenue': 'Doanh Thu Gộp',
+                'contribution_margin': 'Biên Đóng Góp (CM)',
+                'returns_value': 'Hàng Bán Trả',
+                'cogs': 'Giá Vốn Hàng Bán (COGS)',
+                'gross_profit': 'Lợi Nhuận Gộp',
+                'orders_count': 'Số Lượng Đơn Hàng'
+            };
+            const titleInput = document.getElementById('customChartTitle');
+            if (titleInput) {
+                const metricLabel = metric === '__COUNT__' ? 'Số Lượng Bản Ghi' : (metricNames[metric] || metric);
+                const dimLabel = dimNames[dim] || dim;
+                titleInput.value = `Phân Tích ${metricLabel} Theo ${dimLabel}`;
+            }
+        }
+
+        function generateUserCustomChart() {
+            const chartType = document.getElementById('customChartType')?.value || 'bar';
+            const dim = document.getElementById('customChartDimension')?.value || 'channel';
+            const metric = document.getElementById('customChartMetric')?.value || 'net_revenue';
+            const title = document.getElementById('customChartTitle')?.value.trim() || `Phân Tích Theo ${dim}`;
+
+            const data = lastApiResponse || {};
+            const records = data.cleaned_orders_table || [];
+            let labels = [];
+            let values = [];
+            let unit = 'Tr. đ';
+            let isCount = (metric === '__COUNT__' || metric === 'orders_count');
+
+            if (records.length > 0 && records[0] && dim in records[0]) {
+                const groups = {};
+                records.forEach(r => {
+                    let key = r[dim];
+                    if (key === undefined || key === null || String(key).trim() === '') key = 'Khác';
+                    key = String(key).trim();
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(r);
+                });
+                const sortedKeys = Object.keys(groups).slice(0, 15);
+                labels = sortedKeys;
+                values = sortedKeys.map(k => {
+                    const rows = groups[k];
+                    if (isCount) return rows.length;
+                    let sum = 0;
+                    rows.forEach(r => {
+                        let v = r[metric];
+                        if (v !== undefined && v !== null) {
+                            let cleanV = String(v).replace(/[%,đVND\s]/g, '').replace(',', '.');
+                            let n = parseFloat(cleanV);
+                            if (!isNaN(n)) sum += n;
+                        }
+                    });
+                    return Math.round(sum * 100) / 100;
+                });
+                if (isCount) {
+                    unit = 'Bản ghi';
+                } else {
+                    const metricLow = String(metric).toLowerCase();
+                    const maxVal = Math.max(...values, 0);
+                    if (maxVal >= 1000000 && (metricLow.includes('rev') || metricLow.includes('doanh_thu') || metricLow.includes('tien') || metricLow.includes('gia') || metricLow.includes('cogs') || metricLow.includes('cost') || metricLow.includes('profit') || metricLow.includes('margin'))) {
+                        unit = 'Tr. đ';
+                        for (let i = 0; i < values.length; i++) {
+                            values[i] = Math.round((values[i] / 1e6) * 100) / 100;
+                        }
+                    } else if (metricLow.includes('pct') || metricLow.includes('ty_le') || metricLow.includes('rate') || metricLow.includes('percent')) {
+                        unit = '%';
+                    } else if (metricLow.includes('sp') || metricLow.includes('luong') || metricLow.includes('so_luong') || metricLow.includes('qty')) {
+                        unit = 'SP';
+                    } else if (metricLow.includes('rev') || metricLow.includes('tien') || metricLow.includes('gia') || metricLow.includes('cost')) {
+                        unit = 'đ';
+                    } else {
+                        unit = '';
+                    }
+                }
+            } else if (dim === 'channel') {
+                const channels = (data.channel_breakdown && data.channel_breakdown.length > 0) ? data.channel_breakdown : [
+                    { channel: 'Website', net_revenue: 65700000, gross_revenue: 65700000, return_amount: 0, orders_count: 146, cogs: 32000000, gross_profit: 33700000, contribution_margin: 28500000 },
+                    { channel: 'Cửa Hàng', net_revenue: 40400000, gross_revenue: 40400000, return_amount: 0, orders_count: 98, cogs: 21000000, gross_profit: 19400000, contribution_margin: 16800000 },
+                    { channel: 'Đối Tác Sàn', net_revenue: 33500000, gross_revenue: 36700000, return_amount: 3200000, orders_count: 68, cogs: 18500000, gross_profit: 15000000, contribution_margin: 10200000 }
+                ];
+                labels = channels.map(c => c.channel || 'Kênh');
+                values = channels.map(c => {
+                    if (metric === 'gross_revenue') return (c.gross_revenue || 0) / 1e6;
+                    if (metric === 'contribution_margin') return (c.contribution_margin || 0) / 1e6;
+                    if (metric === 'returns_value') return (c.return_amount || 0) / 1e6;
+                    if (metric === 'cogs') return (c.cogs || 0) / 1e6;
+                    if (metric === 'gross_profit') return (c.gross_profit || 0) / 1e6;
+                    if (metric === 'orders_count') return (c.orders_count || 0);
+                    return (c.net_revenue || 0) / 1e6;
+                });
+            } else if (dim === 'product') {
+                const prods = (data.product_breakdown && data.product_breakdown.length > 0) ? data.product_breakdown : [
+                    { product_id: 'SP_01', product_name: 'Combo A', quantity_sold: 85, gross_revenue: 45000000, cogs: 20000000, gross_profit: 25000000, net_revenue: 45000000, contribution_margin: 21000000, return_amount: 0 },
+                    { product_id: 'SP_02', product_name: 'Serum B', quantity_sold: 62, gross_revenue: 32000000, cogs: 14000000, gross_profit: 18000000, net_revenue: 32000000, contribution_margin: 15000000, return_amount: 0 },
+                    { product_id: 'SP_03', product_name: 'Kem C', quantity_sold: 44, gross_revenue: 22000000, cogs: 11000000, gross_profit: 11000000, net_revenue: 22000000, contribution_margin: 8500000, return_amount: 1500000 }
+                ];
+                const slice = prods.slice(0, 7);
+                labels = slice.map(p => p.product_name ? `${p.product_id} (${p.product_name})` : p.product_id);
+                values = slice.map(p => {
+                    if (metric === 'gross_revenue') return (p.gross_revenue || 0) / 1e6;
+                    if (metric === 'contribution_margin') return (p.contribution_margin || (p.gross_profit || 0) * 0.8) / 1e6;
+                    if (metric === 'returns_value') return (p.return_amount || 0) / 1e6;
+                    if (metric === 'cogs') return (p.cogs || 0) / 1e6;
+                    if (metric === 'gross_profit') return (p.gross_profit || 0) / 1e6;
+                    if (metric === 'orders_count') return (p.quantity_sold || 0);
+                    return (p.net_revenue || p.gross_revenue || 0) / 1e6;
+                });
+            } else if (dim === 'timeline') {
+                const timeline = (data.timeline_breakdown && data.timeline_breakdown.length > 0) ? data.timeline_breakdown : [
+                    { date: '2026-10-01', net_revenue: 35000000, gross_revenue: 35000000, return_amount: 0, orders_count: 55, cogs: 16000000, gross_profit: 19000000, contribution_margin: 14000000 },
+                    { date: '2026-10-02', net_revenue: 42000000, gross_revenue: 44000000, return_amount: 2000000, orders_count: 68, cogs: 19000000, gross_profit: 23000000, contribution_margin: 17500000 },
+                    { date: '2026-10-03', net_revenue: 62600000, gross_revenue: 65000000, return_amount: 2400000, orders_count: 98, cogs: 28000000, gross_profit: 34600000, contribution_margin: 25000000 }
+                ];
+                labels = timeline.map(t => t.date || t.period);
+                values = timeline.map(t => {
+                    if (metric === 'gross_revenue') return (t.gross_revenue || t.net_revenue || 0) / 1e6;
+                    if (metric === 'contribution_margin') return (t.contribution_margin || (t.net_revenue || 0) * 0.4) / 1e6;
+                    if (metric === 'returns_value') return (t.return_amount || 0) / 1e6;
+                    if (metric === 'cogs') return (t.cogs || (t.net_revenue || 0) * 0.45) / 1e6;
+                    if (metric === 'gross_profit') return (t.gross_profit || (t.net_revenue || 0) * 0.55) / 1e6;
+                    if (metric === 'orders_count') return (t.orders_count || 0);
+                    return (t.net_revenue || 0) / 1e6;
+                });
+            } else {
+                const pnl = (data.pnl_table && data.pnl_table.length > 0) ? data.pnl_table : [
+                    { campaign_name: 'Bán Hàng Tự Nhiên', campaign_id: 'ORGANIC', net_revenue: 55000000, gross_revenue: 55000000, returns_value: 0, orders_count: 110, cogs: 24000000, gross_profit: 31000000, contribution_margin: 31000000 },
+                    { campaign_name: 'Tri Ân Khách Quen', campaign_id: 'CT2_LOYAL', net_revenue: 48000000, gross_revenue: 48000000, returns_value: 0, orders_count: 95, cogs: 21000000, gross_profit: 27000000, contribution_margin: 22000000 },
+                    { campaign_name: 'KOL Livestream', campaign_id: 'CT4_SMART', net_revenue: 36600000, gross_revenue: 40000000, returns_value: 3400000, orders_count: 72, cogs: 18000000, gross_profit: 18600000, contribution_margin: 8600000 }
+                ];
+                labels = pnl.map(c => c.campaign_name || c.campaign_id);
+                values = pnl.map(c => {
+                    if (metric === 'gross_revenue') return (c.gross_revenue || 0) / 1e6;
+                    if (metric === 'contribution_margin') return (c.contribution_margin || 0) / 1e6;
+                    if (metric === 'returns_value') return (c.returns_value || 0) / 1e6;
+                    if (metric === 'cogs') return (c.cogs || 0) / 1e6;
+                    if (metric === 'gross_profit') return (c.gross_profit || 0) / 1e6;
+                    if (metric === 'orders_count') return (c.orders_count || 0);
+                    return (c.net_revenue || 0) / 1e6;
+                });
+            }
+
+            if (isCount) unit = 'Đơn';
+
+            // Hiển thị khung kết quả
+            const resArea = document.getElementById('userCustomChartResultArea');
+            if (resArea) resArea.classList.remove('hidden');
+
+            const dispTitle = document.getElementById('userCustomChartDisplayTitle');
+            if (dispTitle) dispTitle.innerHTML = `<i class="fa-solid fa-chart-simple text-[#c5dedd]"></i> <span>${title}</span>`;
+
+            const metaBadge = document.getElementById('userCustomChartMetaBadge');
+            if (metaBadge) metaBadge.innerText = `${chartType.toUpperCase()} • ${dim.toUpperCase()}`;
+
+            // Render Canvas
+            const canvas = document.getElementById('userCustomChartCanvas');
+            if (canvas) {
+                if (userCustomChartInstance) {
+                    try { userCustomChartInstance.destroy(); } catch(e) {}
+                    userCustomChartInstance = null;
+                }
+
+                const colors = ['#75BFB2', '#D991A4', '#B8D9D3', '#D9A3AC', '#203833', '#872D43', '#5EABA0'];
+                let actualType = chartType === 'horizontalBar' ? 'bar' : chartType;
+                let indexAxis = chartType === 'horizontalBar' ? 'y' : 'x';
+                let isDoughnut = actualType === 'doughnut' || actualType === 'polarArea';
+
+                let chartConfig = {
+                    type: actualType,
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `${title} (${unit})`,
+                            data: values,
+                            backgroundColor: isDoughnut ? colors.slice(0, labels.length) : (actualType === 'line' ? 'rgba(117, 191, 178, 0.35)' : '#75BFB2'),
+                            borderColor: actualType === 'line' ? '#75BFB2' : (isDoughnut ? '#ffffff' : '#75BFB2'),
+                            borderWidth: actualType === 'line' ? 2.5 : 1,
+                            fill: actualType === 'line',
+                            tension: 0.35,
+                            borderRadius: (actualType === 'bar') ? 6 : 0,
+                            pointBackgroundColor: '#203833',
+                            pointRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: indexAxis,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: isDoughnut,
+                                position: 'bottom',
+                                labels: { boxWidth: 10, font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }
+                            }
+                        }
+                    }
+                };
+
+                if (!isDoughnut) {
+                    chartConfig.options.scales = {
+                        x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } },
+                        y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' ' + (isCount ? '' : 'tr') }, grid: { color: '#f1f5f9' }, beginAtZero: true }
+                    };
+                    if (indexAxis === 'y') {
+                        chartConfig.options.scales = {
+                            x: { ticks: { font: { family: 'Plus Jakarta Sans', size: 9 }, callback: v => v + ' ' + (isCount ? '' : 'tr') }, grid: { color: '#f1f5f9' }, beginAtZero: true },
+                            y: { ticks: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }, grid: { display: false } }
+                        };
+                    }
+                }
+
+                userCustomChartInstance = new Chart(canvas.getContext('2d'), chartConfig);
+            }
+
+            // AI Insight Generator với số liệu định lượng chính xác
+            let maxIdx = 0;
+            let minIdx = 0;
+            for (let i = 1; i < values.length; i++) {
+                if (values[i] > values[maxIdx]) maxIdx = i;
+                if (values[i] < values[minIdx]) minIdx = i;
+            }
+            const maxLabel = labels[maxIdx] || 'Nhóm dẫn đầu';
+            const maxVal = values[maxIdx] || 0;
+            const minLabel = labels[minIdx] || 'Nhóm thấp nhất';
+            const minVal = values[minIdx] || 0;
+            const sumVal = values.reduce((a, b) => a + (Number(b) || 0), 0);
+            const maxShare = sumVal > 0 ? Math.round((maxVal / sumVal) * 100) : 0;
+
+            let aiInsightText = `
+                <p>• <strong>Dẫn đầu chỉ số:</strong> Nhóm <strong>"${maxLabel}"</strong> ghi nhận mức cao nhất đạt <strong>${typeof maxVal === 'number' ? maxVal.toFixed(1) : maxVal} ${unit}</strong> (chiếm <strong>${maxShare}%</strong> toàn bộ quy mô khảo sát).</p>
+                <p>• <strong>Điểm trũng & Cảnh báo:</strong> Nhóm <strong>"${minLabel}"</strong> có quy mô thấp nhất đạt <strong>${typeof minVal === 'number' ? minVal.toFixed(1) : minVal} ${unit}</strong>${minVal < 0 ? ' <span class="text-rose-600 font-bold">(Giá trị âm, cần xử lý ngay!)</span>' : ''}.</p>
+                <p>• <strong>Khuyến nghị từ AI Studio:</strong> Tập trung tối ưu hóa các điểm nghẽn của nhóm "${minLabel}", đồng thời nhân bản kinh nghiệm thực thi thành công từ "${maxLabel}" sang các phân khúc còn lại để gia tăng hiệu quả tổng thể.</p>
+            `;
+
+            const aiBox = document.getElementById('userCustomChartAiInsight');
+            if (aiBox) aiBox.innerHTML = aiInsightText;
+
+            // Reset trạng thái alert
+            const alertBox = document.getElementById('customChartAddedAlert');
+            if (alertBox) alertBox.classList.add('hidden');
+
+            activeUserCustomChart = {
+                id: 'cust_' + Date.now(),
+                title: title,
+                chartType: chartType,
+                dim: dim,
+                metric: metric,
+                unit: unit,
+                labels: labels,
+                values: values,
+                aiInsight: aiInsightText
+            };
+
+            recordAuditTrail("Phân Tích Dữ Liệu", `Khởi tạo thành công biểu đồ tùy chỉnh: "${title}" (${labels.length} điểm dữ liệu)`, "ChartBuilder", "INFO");
+            showToast(`✨ Đã vẽ biểu đồ "${title}" và trích xuất nhận định AI thành công!`, "success");
+        }
+
+        function addCustomChartToReport() {
+            if (!activeUserCustomChart) {
+                showToast("⚠️ Vui lòng nhấp 'TẠO BIỂU ĐỒ & NHẬN PHÂN TÍCH TỪ AI' trước khi thêm vào báo cáo.", "warning");
+                return;
+            }
+
+            userCustomCharts.push({...activeUserCustomChart});
+            if (lastApiResponse) {
+                lastApiResponse.custom_charts = userCustomCharts;
+            }
+
+            try {
+                fetch('/api/save_custom_charts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ custom_charts: userCustomCharts })
+                });
+            } catch(e) {}
+
+            const alertBox = document.getElementById('customChartAddedAlert');
+            if (alertBox) alertBox.classList.remove('hidden');
+
+            renderStep5CustomCharts();
+
+            recordAuditTrail("Báo Cáo Toàn Diện", `Đã đưa biểu đồ tùy chỉnh "${activeUserCustomChart.title}" vào Báo Cáo Bước 5.`, "ChartIntegration", "INFO");
+            showToast(`✅ Đã tích hợp biểu đồ "${activeUserCustomChart.title}" vào Báo Cáo Bước 5 thành công!`, "success");
+        }
+
+        function renderStep5CustomCharts() {
+            const container = document.getElementById('step5CustomChartsSection');
+            const listEl = document.getElementById('step5CustomChartsList');
+            const badgeEl = document.getElementById('step5CustomChartsBadge');
+            if (!container || !listEl) return;
+
+            if (!userCustomCharts || userCustomCharts.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            if (badgeEl) badgeEl.innerText = `${userCustomCharts.length} Biểu Đồ Tùy Chỉnh`;
+
+            Object.keys(step5CustomChartInstances).forEach(k => {
+                try { step5CustomChartInstances[k].destroy(); } catch(e) {}
+            });
+            step5CustomChartInstances = {};
+
+            listEl.innerHTML = userCustomCharts.map((c, idx) => `
+                <div class="p-5 bg-white border-2 border-[#75BFB2] rounded-2xl shadow-sm space-y-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 flex-wrap gap-2">
+                        <strong class="text-xs text-[#203833] font-black uppercase flex items-center gap-1.5">
+                            <i class="fa-solid fa-chart-simple text-[#75BFB2]"></i>
+                            <span>${c.title}</span>
+                        </strong>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#B8D9D3]/40 text-[#203833]">${c.chartType.toUpperCase()} • ${c.dim.toUpperCase()}</span>
+                    </div>
+                    <div class="h-60 relative w-full">
+                        <canvas id="step5CustCanvas_${c.id}"></canvas>
+                    </div>
+                    <div class="p-3 bg-[#F2E5E4] rounded-xl text-xs text-slate-700 leading-relaxed font-medium">
+                        <strong class="text-[#872D43] block mb-1">🧠 Nhận định & Đề xuất AI:</strong>
+                        ${c.aiInsight}
+                    </div>
+                </div>
+            `).join('');
+
+            userCustomCharts.forEach(c => {
+                const cv = document.getElementById(`step5CustCanvas_${c.id}`);
+                if (!cv) return;
+
+                const colors = ['#75BFB2', '#D991A4', '#B8D9D3', '#D9A3AC', '#203833', '#872D43'];
+                let actualType = c.chartType === 'horizontalBar' ? 'bar' : c.chartType;
+                let indexAxis = c.chartType === 'horizontalBar' ? 'y' : 'x';
+                let isDoughnut = actualType === 'doughnut' || actualType === 'polarArea';
+
+                step5CustomChartInstances[c.id] = new Chart(cv.getContext('2d'), {
+                    type: actualType,
+                    data: {
+                        labels: c.labels,
+                        datasets: [{
+                            label: `${c.title} (${c.unit})`,
+                            data: c.values,
+                            backgroundColor: isDoughnut ? colors.slice(0, c.labels.length) : (actualType === 'line' ? 'rgba(117, 191, 178, 0.35)' : '#75BFB2'),
+                            borderColor: actualType === 'line' ? '#75BFB2' : (isDoughnut ? '#ffffff' : '#75BFB2'),
+                            borderWidth: actualType === 'line' ? 2.5 : 1,
+                            fill: actualType === 'line',
+                            tension: 0.35,
+                            borderRadius: (actualType === 'bar') ? 6 : 0
+                        }]
+                    },
+                    options: {
+                        indexAxis: indexAxis,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: isDoughnut, position: 'bottom' }
+                        }
+                    }
+                });
+            });
+        }
 
         function updateStepLockUI() {
             for (let i = 1; i <= 5; i++) {
@@ -3796,7 +4217,9 @@
             }
 
             // Tự động nạp danh sách Cột Chiều & Cột Chỉ Số vào Bộ Tùy Chỉnh Biểu Đồ Bước 3
-            populateCustomChartSelectors(data);
+            if (typeof populateCustomChartSelectors === 'function') {
+                try { populateCustomChartSelectors(data); } catch (e) { console.warn('populateCustomChartSelectors:', e); }
+            }
 
             const sideExceptionsBadge = document.getElementById('sideExceptionsBadge');
             if (exceptionsCount > 0) {
@@ -3852,7 +4275,9 @@
                 geminiEl.innerText = data.ai_executive_insights || "Đã phân tích toàn bộ P&L và ngoại lệ từ tệp tải lên.";
             }
 
-            populateCustomChartSelectors(data);
+            if (typeof populateCustomChartSelectors === 'function') {
+                try { populateCustomChartSelectors(data); } catch (e) { console.warn('populateCustomChartSelectors:', e); }
+            }
             renderAuditTrail(data.audit_trail || []);
         }
 
@@ -7329,11 +7754,118 @@
             goToStep(3);
         }
 
-        // Render Audit Logs
+        // ===================================================================
+        // NHẬT KÝ KIỂM TOÁN (AUDIT TRAIL) - GHI NHẬN, LỌC, TÌM KIẾM
+        // ===================================================================
+        var currentAuditLogs = [];
+        var currentAuditLevelFilter = 'ALL';
+
+        function _auditNow() {
+            const now = new Date();
+            const p = n => String(n).padStart(2, '0');
+            return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+        }
+
+        function _auditEscape(s) {
+            return String(s === undefined || s === null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function _auditKey(l) {
+            return `${l.timestamp}|${l.step}|${l.message}`;
+        }
+
+        function _loadAuditFromStorage() {
+            try {
+                const raw = localStorage.getItem('thuha_audit_logs');
+                if (raw) {
+                    const arr = JSON.parse(raw);
+                    if (Array.isArray(arr)) currentAuditLogs = arr;
+                }
+            } catch (e) {}
+        }
+
+        function _saveAuditToStorage() {
+            try {
+                localStorage.setItem('thuha_audit_logs', JSON.stringify(currentAuditLogs.slice(0, 500)));
+            } catch (e) {}
+        }
+
+        // Ghi một sự kiện vào nhật ký (gọi từ mọi bước thao tác)
+        function recordAuditTrail(step, message, tool_name = "AGENT_CORE", level = "INFO") {
+            try {
+                const entry = {
+                    timestamp: _auditNow(),
+                    level: String(level || 'INFO').toUpperCase(),
+                    step: step || 'Hệ Thống',
+                    tool_name: tool_name || 'AGENT_CORE',
+                    message: message || ''
+                };
+                if (!Array.isArray(currentAuditLogs)) currentAuditLogs = [];
+                currentAuditLogs.unshift(entry);
+                if (currentAuditLogs.length > 500) currentAuditLogs.length = 500;
+                _saveAuditToStorage();
+                renderAuditTrailTable();
+            } catch (e) {
+                console.warn('recordAuditTrail:', e);
+            }
+        }
+
+        // Nhận nhật ký từ backend sau khi chạy pipeline và gộp với nhật ký phía giao diện
         function renderAuditTrail(logs) {
+            if (!Array.isArray(currentAuditLogs)) currentAuditLogs = [];
+            if (Array.isArray(logs) && logs.length) {
+                const seen = new Set(currentAuditLogs.map(_auditKey));
+                logs.forEach(l => {
+                    const entry = {
+                        timestamp: l.timestamp || _auditNow(),
+                        level: String(l.level || 'INFO').toUpperCase(),
+                        step: l.step || 'Hệ Thống',
+                        tool_name: l.tool_name || l.tool || 'BACKEND',
+                        message: l.message || l.detail || ''
+                    };
+                    const k = _auditKey(entry);
+                    if (!seen.has(k)) { seen.add(k); currentAuditLogs.push(entry); }
+                });
+                currentAuditLogs.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+                _saveAuditToStorage();
+            }
+            renderAuditTrailTable();
+        }
+
+        function renderAuditTrailTable() {
             const tbody = document.getElementById('auditTrailTable');
-            if (!logs || !logs.length) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400 italic font-sans">Chưa có nhật ký nào...</td></tr>`;
+            if (!tbody) return;
+            const logs = Array.isArray(currentAuditLogs) ? currentAuditLogs : [];
+            const keyword = (document.getElementById('logFilter')?.value || '').trim().toLowerCase();
+
+            const filtered = logs.filter(l => {
+                if (currentAuditLevelFilter !== 'ALL' && l.level !== currentAuditLevelFilter) return false;
+                if (keyword) {
+                    const txt = `${l.timestamp} ${l.level} ${l.step} ${l.tool_name} ${l.message}`.toLowerCase();
+                    if (!txt.includes(keyword)) return false;
+                }
+                return true;
+            });
+
+            // Cập nhật bộ đếm & trạng thái nút lọc
+            const counts = { ALL: logs.length, INFO: 0, WARNING: 0, ACTION_REQUIRED: 0 };
+            logs.forEach(l => { if (counts[l.level] !== undefined) counts[l.level]++; });
+            document.querySelectorAll('[data-audit-filter]').forEach(btn => {
+                const lv = btn.getAttribute('data-audit-filter');
+                const active = lv === currentAuditLevelFilter;
+                btn.style.background = active ? '#183634' : '';
+                btn.style.color = active ? '#ffffff' : '';
+                const c = btn.querySelector('.audit-count');
+                if (c) c.textContent = counts[lv] !== undefined ? counts[lv] : 0;
+            });
+
+            if (!logs.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 italic">Chưa có sự kiện nào. Hãy tải tệp dữ liệu ở Bước 1 — mọi thao tác sẽ được ghi nhận tự động tại đây.</td></tr>`;
+                return;
+            }
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 italic">Không có sự kiện nào khớp với bộ lọc hiện tại.</td></tr>`;
                 return;
             }
 
@@ -7343,29 +7875,54 @@
                 'ACTION_REQUIRED': 'bg-rose-50 text-rose-700 border-rose-200'
             };
 
-            tbody.innerHTML = logs.map(log => `
+            tbody.innerHTML = filtered.map(log => `
                 <tr class="hover:bg-slate-50/80">
-                    <td class="p-3 text-slate-500 whitespace-nowrap">${log.timestamp}</td>
+                    <td class="p-3 text-slate-500 whitespace-nowrap">${_auditEscape(log.timestamp)}</td>
                     <td class="p-3 text-center">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${levelBadges[log.level] || levelBadges.INFO}">
-                            ${log.level}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${levelBadges[log.level] || 'bg-slate-50 text-slate-600 border-slate-200'}">
+                            ${_auditEscape(log.level)}
                         </span>
                     </td>
-                    <td class="p-3 text-slate-800 font-bold">${log.step}</td>
-                    <td class="p-3 text-slate-600">${log.tool_name}</td>
-                    <td class="p-3 text-slate-700 font-sans">${log.message}</td>
+                    <td class="p-3 text-slate-800 font-bold">${_auditEscape(log.step)}</td>
+                    <td class="p-3 text-slate-600">${_auditEscape(log.tool_name)}</td>
+                    <td class="p-3 text-slate-700 font-sans">${_auditEscape(log.message)}</td>
                 </tr>
             `).join('');
         }
 
-        function filterLogs() {
-            const input = document.getElementById('logFilter').value.toLowerCase();
-            const rows = document.querySelectorAll('#auditTrailTable tr');
-            rows.forEach(row => {
-                const text = row.innerText.toLowerCase();
-                row.style.display = text.includes(input) ? '' : 'none';
-            });
+        function filterAuditLevel(level) {
+            currentAuditLevelFilter = level || 'ALL';
+            renderAuditTrailTable();
         }
+
+        function filterLogs() {
+            renderAuditTrailTable();
+        }
+
+        function clearAuditTrail() {
+            if (!confirm('Xóa toàn bộ nhật ký kiểm toán đã lưu trên trình duyệt này?')) return;
+            currentAuditLogs = [];
+            _saveAuditToStorage();
+            renderAuditTrailTable();
+            showToast('🧹 Đã xóa nhật ký kiểm toán.', 'info');
+        }
+
+        function exportAuditTrailCsv() {
+            const logs = Array.isArray(currentAuditLogs) ? currentAuditLogs : [];
+            if (!logs.length) { showToast('Chưa có sự kiện để xuất.', 'warning'); return; }
+            const esc = v => `"${String(v === undefined || v === null ? '' : v).replace(/"/g, '""')}"`;
+            const rows = [['Thời gian', 'Cấp độ', 'Bước xử lý', 'Công cụ', 'Nội dung']]
+                .concat(logs.map(l => [l.timestamp, l.level, l.step, l.tool_name, l.message]));
+            const csv = '\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `nhat-ky-kiem-toan-${Date.now()}.csv`;
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+
+        _loadAuditFromStorage();
+        document.addEventListener('DOMContentLoaded', renderAuditTrailTable);
 
         // Render Sales Wave Chart
         function renderSalesWaveChart(data, angle) {
@@ -8569,39 +9126,34 @@
         // ==========================================
         // SIDEBAR TOGGLE (ẨN/HIỆN & DI CHUYỂN RA VÀO)
         // ==========================================
-        let isSidebarCollapsed = false;
+        let isSidebarCollapsed = false; // luôn hiển thị đầy đủ chữ khi thanh công cụ được mở
+        let isSidebarVisible = false;   // MẶC ĐỊNH: thanh công cụ ẨN, chỉ hiện khi người dùng bấm
+
+        function setSidebarVisible(visible) {
+            const sidebar = document.getElementById('appSidebar');
+            if (!sidebar) return;
+            isSidebarVisible = !!visible;
+            sidebar.style.display = isSidebarVisible ? 'flex' : 'none';
+            const icon = document.getElementById('sidebarToggleIcon');
+            if (icon) {
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-left');
+            }
+            document.querySelectorAll('.sidebar-menu-toggle-icon').forEach(ic => {
+                ic.classList.toggle('fa-bars', !isSidebarVisible);
+                ic.classList.toggle('fa-xmark', isSidebarVisible);
+            });
+        }
 
         function toggleSidebar() {
-            const sidebar = document.getElementById('appSidebar');
-            const icon = document.getElementById('sidebarToggleIcon');
-            const sidebarTexts = document.querySelectorAll('.sidebar-text');
-            const sideBtns = document.querySelectorAll('.side-btn');
-            
-            if (!sidebar) return;
-            isSidebarCollapsed = !isSidebarCollapsed;
-
-            if (isSidebarCollapsed) {
-                sidebar.classList.remove('w-64', 'px-4');
-                sidebar.classList.add('w-20', 'px-2.5');
-                sidebarTexts.forEach(el => el.classList.add('hidden'));
-                sideBtns.forEach(btn => btn.classList.add('justify-center', '!px-2'));
-                if (icon) {
-                    icon.classList.remove('fa-chevron-left');
-                    icon.classList.add('fa-chevron-right');
-                }
-                showToast("Thanh công cụ đã được thu gọn.", "info");
-            } else {
-                sidebar.classList.remove('w-20', 'px-2.5');
-                sidebar.classList.add('w-64', 'px-4');
-                sidebarTexts.forEach(el => el.classList.remove('hidden'));
-                sideBtns.forEach(btn => btn.classList.remove('justify-center', '!px-2'));
-                if (icon) {
-                    icon.classList.remove('fa-chevron-right');
-                    icon.classList.add('fa-chevron-left');
-                }
-                showToast("Thanh công cụ đã được mở rộng.", "info");
-            }
+            setSidebarVisible(!isSidebarVisible);
         }
+
+        // Tự ẩn lại thanh công cụ sau khi người dùng chọn một mục
+        document.addEventListener('click', function (ev) {
+            const btn = ev.target.closest && ev.target.closest('#appSidebar .side-btn');
+            if (btn && isSidebarVisible) setTimeout(() => setSidebarVisible(false), 150);
+        });
 
         // ==========================================
         // USER FEEDBACK & BUG REPORT MODAL
