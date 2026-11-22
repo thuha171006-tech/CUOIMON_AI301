@@ -11,17 +11,64 @@ class DynamicModificationEngine:
     Never invents fake data - applies adjustments strictly to empirical metrics.
     """
 
-    @staticmethod
-    def _safe_float(val, default: float = 0.0) -> float:
+    @classmethod
+    def _safe_float(cls, val, default: float = 0.0) -> float:
         if val is None:
             return default
         try:
             if isinstance(val, (int, float)):
                 return float(val)
-            s = str(val).replace(",", "").replace("đ", "").replace("VND", "").replace("%", "").strip()
+            s = str(val).replace("đ", "").replace("VND", "").replace("%", "").strip()
+            # Vietnamese / European dot thousand separators: e.g. 10.000.000
+            if re.search(r'^\d{1,3}(?:\.\d{3})+$', s):
+                s = s.replace(".", "")
+            elif re.search(r'^\d{1,3}(?:,\d{3})+$', s):
+                s = s.replace(",", "")
+            elif "," in s and "." in s:
+                if s.rfind(",") > s.rfind("."):
+                    s = s.replace(".", "").replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            elif re.search(r'[\.,]\d{1,2}$', s):
+                s = s.replace(",", ".")
+            else:
+                s = s.replace(",", "")
             return float(s) if s else default
         except Exception:
             return default
+
+    @classmethod
+    def parse_num_and_op(cls, text: str) -> Tuple[Any, str]:
+        op = "=="
+        text_norm = cls._normalize_str(text)
+        if any(w in text_norm for w in ['<=', 'nho hon hoac bang', 'be hon hoac bang', 'duoi hoac bang', 'thap hon hoac bang']):
+            op = '<='
+        elif any(w in text_norm for w in ['<', 'nho hon', 'be hon', 'it hon', 'thap hon', 'duoi']):
+            op = '<'
+        elif any(w in text_norm for w in ['>=', 'lon hon hoac bang', 'cao hon hoac bang', 'nhieu hon hoac bang', 'tren hoac bang', 'tu ']):
+            op = '>='
+        elif any(w in text_norm for w in ['>', 'lon hon', 'cao hon', 'nhieu hon', 'tren']):
+            op = '>'
+        elif any(w in text_norm for w in ['!=', 'khac']):
+            op = '!='
+        else:
+            op = '=='
+
+        m = re.search(r'(\d+(?:[\.,]\d{3})*(?:[\.,]\d+)?|\d+)\s*(trieu|tr|ty|k|nghin|ngan)?', text_norm)
+        if not m:
+            return None, op
+        num_str = m.group(1)
+        unit = (m.group(2) or '').strip()
+
+        if unit in ['trieu', 'tr']:
+            val = float(num_str.replace(',', '.')) * 1_000_000
+        elif unit in ['ty']:
+            val = float(num_str.replace(',', '.')) * 1_000_000_000
+        elif unit in ['k', 'nghin', 'ngan']:
+            val = float(num_str.replace(',', '.')) * 1_000
+        else:
+            val = cls._safe_float(num_str)
+        return val, op
 
     @staticmethod
     def _normalize_str(s: str) -> str:
@@ -88,6 +135,7 @@ class DynamicModificationEngine:
         # Match target column by name
         target_col = None
         col_pos = -1
+        col_match_len = 0
         sorted_cols = sorted(cols, key=lambda c: len(cls._normalize_str(c)), reverse=True)
         for c in sorted_cols:
             c_norm = cls._normalize_str(c)
@@ -96,12 +144,16 @@ class DynamicModificationEngine:
             if pos != -1:
                 target_col = c
                 col_pos = pos
+                col_match_len = len(clean_c_norm)
                 break
             # Match significant words
             words = [w for w in clean_c_norm.split() if len(w) > 2 and w not in ["vnd", "ngay", "thang", "nam", "cac", "nhung", "dong"]]
             if len(words) >= 2 and all(w in req_norm for w in words):
                 target_col = c
                 col_pos = req_norm.find(words[0])
+                last_w = words[-1]
+                last_w_pos = req_norm.find(last_w)
+                col_match_len = (last_w_pos + len(last_w)) - col_pos
                 break
 
         # If target column not matched by name, check if any unique categorical value matches
@@ -112,6 +164,7 @@ class DynamicModificationEngine:
                     if len(v_norm) >= 2 and v_norm in req_norm and not v_norm.isdigit():
                         target_col = c
                         col_pos = req_norm.find(v_norm)
+                        col_match_len = len(v_norm)
                         break
                 if target_col:
                     break
@@ -120,25 +173,12 @@ class DynamicModificationEngine:
             return cleaned_orders, "", ""
 
         # Determine operator and target value
-        after_text = req_norm[col_pos + len(cls._normalize_str(target_col)):].strip() if col_pos != -1 else req_norm
-        target_val = None
-        op = "=="
+        after_text = req_norm[col_pos + col_match_len:].strip() if col_pos != -1 else req_norm
+        target_val, op = cls.parse_num_and_op(after_text)
+        if target_val is None:
+            target_val, op = cls.parse_num_and_op(req_norm)
 
-        # Check numeric comparison in after_text or whole req_norm
-        num_match = re.search(r'(=|==|>=|<=|>|<|!=|la|bang|co gia tri|lon hon|nho hon|tren|duoi)?\s*([0-9]+(?:\.[0-9]+)?)', after_text)
-        if not num_match or not num_match.group(2):
-            num_match = re.search(r'(=|==|>=|<=|>|<|!=|la|bang|co gia tri|lon hon|nho hon|tren|duoi)?\s*([0-9]+(?:\.[0-9]+)?)', req_norm)
-
-        if num_match and num_match.group(2):
-            target_val = float(num_match.group(2))
-            op_str = (num_match.group(1) or "").strip()
-            if op_str in [">", "lon hon", "tren"]: op = ">"
-            elif op_str in ["<", "nho hon", "duoi"]: op = "<"
-            elif op_str in [">="]: op = ">="
-            elif op_str in ["<="]: op = "<="
-            elif op_str in ["!=", "khac"]: op = "!="
-            else: op = "=="
-        else:
+        if target_val is None:
             # String match from col_values
             for v in col_values.get(target_col, set()):
                 v_norm = cls._normalize_str(v)
@@ -162,7 +202,7 @@ class DynamicModificationEngine:
 
             if isinstance(target_val, (int, float)):
                 try:
-                    num_val = float(str(val).replace(",", "").replace("đ", "").replace("VND", "").strip())
+                    num_val = cls._safe_float(val)
                     if op == "==": return num_val == target_val
                     if op == ">": return num_val > target_val
                     if op == "<": return num_val < target_val
@@ -183,13 +223,155 @@ class DynamicModificationEngine:
             new_orders = [o for o in cleaned_orders if matches_target(o)]
 
         removed_cnt = before_cnt - len(new_orders)
-        val_disp = int(target_val) if isinstance(target_val, float) and target_val.is_integer() else target_val
-        op_desc = f"{op} {val_disp}" if isinstance(target_val, (int, float)) else f"= '{target_val}'"
+        if isinstance(target_val, (int, float)):
+            val_disp = f"{target_val:,.0f} đ" if target_val >= 1000 else f"{target_val:g}"
+            op_desc = f"{op} {val_disp}"
+        else:
+            op_desc = f"= '{target_val}'"
 
         verb = "loại bỏ" if is_removal else "lọc giữ"
         note = f"Đã {verb} {removed_cnt} dòng có '{target_col}' {op_desc} (Dữ liệu còn lại: {len(new_orders)} bản ghi sạch)."
         summary = f"{'Loại bỏ' if is_removal else 'Lọc giữ'} '{target_col}' {op_desc}"
         return new_orders, note, summary
+
+    @classmethod
+    def compute_analytical_query(cls, orders: List[Dict[str, Any]], cols: List[str], req_text: str) -> Any:
+        if not orders:
+            return None
+        req_norm = cls._normalize_str(req_text)
+        is_calc_req = any(w in req_norm for w in ['tinh', 'xem', 'thong ke', 'tong hop', 'phan tich', 'bao nhieu', 'ty le', 'theo', 'nhom', 'xep hang', 'so sanh'])
+        if not is_calc_req:
+            return None
+
+        # 1. Detect Dimension Column
+        dim_col = None
+        dim_alias_name = ""
+        if any(w in req_norm for w in ['thang', 'thoi gian', 'ngay', 'timeline', 'date', 'month', 'chu ky', 'quy', 'nam', 'year']):
+            dim_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['thang', 'thoi gian', 'ngay', 'date', 'month', 'quy', 'timeline'])), None)
+            dim_alias_name = "Tháng / Thời gian"
+        elif any(w in req_norm for w in ['kenh', 'channel', 'san tmdt', 'nen tang', 'platform']):
+            dim_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['kenh', 'channel', 'platform'])), None)
+            dim_alias_name = "Kênh bán hàng"
+        elif any(w in req_norm for w in ['khu vuc', 'vung', 'mien', 'region', 'dia ly', 'tinh thanh', 'city']):
+            dim_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['khu vuc', 'vung', 'mien', 'region', 'tinh'])), None)
+            dim_alias_name = "Khu vực địa lý"
+        elif any(w in req_norm for w in ['san pham', 'product', 'sku', 'mat hang', 'item', 'hang hoa']):
+            dim_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['san pham', 'product', 'sku', 'ten hang'])), None)
+            dim_alias_name = "Sản phẩm"
+        elif any(w in req_norm for w in ['nganh hang', 'danh muc', 'category']):
+            dim_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['nganh hang', 'danh muc', 'category'])), None)
+            dim_alias_name = "Ngành hàng"
+
+        # Direct column matching if not found by alias
+        if not dim_col:
+            for c in cols:
+                c_norm = cls._normalize_str(c).split('(')[0].strip()
+                if len(c_norm) >= 3 and c_norm in req_norm:
+                    dim_col = c
+                    dim_alias_name = c
+                    break
+
+        # Fallback to first non-numeric categorical column
+        if not dim_col:
+            for c in cols:
+                c_norm = cls._normalize_str(c)
+                if not any(k in c_norm for k in ['stt', 'id', 'ma', 'tien', 'doanh thu', 'gia', 'phi', 'vnd']):
+                    dim_col = c
+                    dim_alias_name = c
+                    break
+
+        if not dim_col:
+            return None
+
+        # 2. Detect Metric Column
+        metric_col = None
+        metric_name = "Doanh thu"
+        if any(w in req_norm for w in ['loi nhuan', 'margin', 'cm', 'profit']):
+            metric_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['loi nhuan', 'margin', 'cm', 'profit', 'gross_profit'])), None)
+            metric_name = "Lợi nhuận"
+        elif any(w in req_norm for w in ['chi phi', 'cost', 'ngan sach', 'fee', 'phi']):
+            metric_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['chi phi', 'cost', 'fee', 'phi'])), None)
+            metric_name = "Chi phí"
+        elif any(w in req_norm for w in ['gia von', 'cogs']):
+            metric_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['gia von', 'cogs'])), None)
+            metric_name = "Giá vốn"
+
+        if not metric_col:
+            metric_col = next((c for c in cols if any(k in cls._normalize_str(c) for k in ['doanh thu', 'revenue', 'gross_amount', 'net_revenue', 'tien', 'thanh tien'])), None)
+            metric_name = "Doanh thu"
+
+        if not metric_col:
+            for c in cols:
+                sample_v = orders[0].get(c)
+                if cls._safe_float(sample_v) > 0:
+                    metric_col = c
+                    metric_name = c
+                    break
+
+        if not metric_col:
+            metric_col = cols[-1]
+
+        # 3. Aggregate groups
+        groups = {}
+        for o in orders:
+            raw_grp = o.get(dim_col)
+            grp = str(raw_grp).strip() if raw_grp is not None else "Chưa phân nhóm"
+            if not grp or grp.lower() in ["nan", "none", "--"]:
+                grp = "Chưa phân nhóm"
+            if grp not in groups:
+                groups[grp] = {"name": grp, "total_metric": 0.0, "count": 0}
+            val = cls._safe_float(o.get(metric_col, o.get("net_revenue", o.get("gross_amount", 0.0))))
+            groups[grp]["total_metric"] += val
+            groups[grp]["count"] += 1
+
+        total_all = sum(g["total_metric"] for g in groups.values())
+        total_orders = sum(g["count"] for g in groups.values())
+
+        rows = []
+        for g in groups.values():
+            pct = round((g["total_metric"] / total_all * 100.0), 1) if total_all > 0 else 0.0
+            avg = round((g["total_metric"] / g["count"]), 0) if g["count"] > 0 else 0.0
+            rows.append({
+                "group_name": g["name"],
+                "metric_value": g["total_metric"],
+                "formatted_value": f"{g['total_metric']:,.0f} đ",
+                "percentage": pct,
+                "order_count": g["count"],
+                "average_value": avg,
+                "formatted_average": f"{avg:,.0f} đ"
+            })
+
+        is_chronological = any(k in cls._normalize_str(dim_col) for k in ['thang', 'ngay', 'date', 'thoi gian', 'year', 'nam'])
+        if is_chronological:
+            rows.sort(key=lambda r: str(r["group_name"]))
+        else:
+            rows.sort(key=lambda r: r["metric_value"], reverse=True)
+
+        top_g = max(rows, key=lambda r: r["metric_value"]) if rows else None
+        bot_g = min(rows, key=lambda r: r["metric_value"]) if rows else None
+        avg_per_group = (total_all / len(rows)) if rows else 0.0
+
+        return {
+            "title": f"BẢNG PHÂN TÍCH {metric_name.upper()} THEO {dim_col.upper()}",
+            "dimension_col": dim_col,
+            "metric_col": metric_col,
+            "metric_name": metric_name,
+            "total_metric_value": total_all,
+            "formatted_total": f"{total_all:,.0f} đ",
+            "total_orders": total_orders,
+            "groups_count": len(rows),
+            "top_group": top_g,
+            "bottom_group": bot_g,
+            "average_per_group": round(avg_per_group, 0),
+            "formatted_average_per_group": f"{avg_per_group:,.0f} đ",
+            "rows": rows,
+            "insights": [
+                f"Tổng {metric_name} toàn bộ {len(rows)} nhóm {dim_col}: {total_all:,.0f} đ ({total_orders} bản ghi đối soát).",
+                f"Nhóm dẫn đầu: '{top_g['group_name']}' với {top_g['formatted_value']} ({top_g['percentage']}% tổng số)." if top_g else "",
+                f"Nhóm thấp nhất: '{bot_g['group_name']}' với {bot_g['formatted_value']} ({bot_g['percentage']}% tổng số)." if bot_g else "",
+                f"Doanh thu trung bình mỗi nhóm {dim_col}: {avg_per_group:,.0f} đ."
+            ]
+        }
 
     @classmethod
     def apply_modification(cls, data: Dict[str, Any], request_text: str, step: int = 3) -> Dict[str, Any]:
@@ -523,6 +705,13 @@ class DynamicModificationEngine:
         if domain_type and cleaned_orders:
             try:
                 df_clean = pd.DataFrame(cleaned_orders)
+                for col in df_clean.columns:
+                    try:
+                        s_first = df_clean[col].dropna().astype(str).str.strip()
+                        if not s_first.empty and s_first.str.contains(r'đ|VND|%|\.000|,000').any():
+                            df_clean[col] = df_clean[col].apply(cls._safe_float)
+                    except Exception:
+                        pass
                 rebuilt_angles = DomainAnalyzer.build_domain_analysis_angles(df_clean, domain_type, orig_cols)
                 if rebuilt_angles:
                     updated_domain_angles = rebuilt_angles
@@ -544,8 +733,15 @@ class DynamicModificationEngine:
             except Exception as e:
                 print(f"[MOD_ENGINE] Lỗi tái cấu trúc domain metadata: {e}")
 
-        # Smart Analytical Intent Recognition
-        if any(k in req_lower for k in ["tính doanh thu", "tinh doanh thu", "phân tích", "phan tich", "xem doanh thu", "thống kê", "thong ke", "tổng hợp", "tong hop", "tính", "tinh"]):
+        # Smart Analytical Intent Recognition & Detailed Dynamic Computation
+        calc_result = cls.compute_analytical_query(cleaned_orders, orig_cols, req)
+        if calc_result:
+            top_info = f"Nhóm cao nhất: '{calc_result['top_group']['group_name']}' ({calc_result['top_group']['formatted_value']})" if calc_result.get('top_group') else ""
+            note = f"Đã tính toán chi tiết {calc_result['metric_name']} theo {calc_result['dimension_col']} ({calc_result['groups_count']} nhóm đối soát. {top_info})."
+            applied_notes.append(note)
+            if not action_summary:
+                action_summary = f"Tính {calc_result['metric_name'].lower()} theo {calc_result['dimension_col']}"
+        elif any(k in req_lower for k in ["tính doanh thu", "tinh doanh thu", "phân tích", "phan tich", "xem doanh thu", "thống kê", "thong ke", "tổng hợp", "tong hop", "tính", "tinh"]):
             if any(k in req_lower for k in ["kênh", "kenh", "channel", "nền tảng", "nen tang"]):
                 applied_notes.append("Đã phân bổ và tính toán chi tiết doanh thu theo từng kênh bán hàng (Omnichannel).")
                 if not action_summary: action_summary = "Tính doanh thu theo kênh bán hàng"
@@ -577,10 +773,14 @@ class DynamicModificationEngine:
                 "cm_pct": kpis.get("cm_pct", 0)
             }
         }
+        if calc_result:
+            mod_entry["analytical_calculation_result"] = calc_result
         modifications_log.append(mod_entry)
 
         # Assemble updated pipeline output
         updated_data = dict(data)
+        if calc_result:
+            updated_data["analytical_calculation_result"] = calc_result
         updated_data["financial_kpis"] = kpis
         updated_data["summary_kpis"] = dict(kpis)
         updated_data["cleaned_orders_table"] = cleaned_orders
