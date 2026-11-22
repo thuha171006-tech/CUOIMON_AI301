@@ -8821,6 +8821,10 @@
                     </tr>
                 `).join('') : '<tr><td colspan="11" style="padding: 24px; text-align: center; color: #94a3b8;">Chưa có dữ liệu thống kê P&L.</td></tr>';
 
+                const tagScriptOpen = '<' + 'script' + '>';
+                const tagScriptClose = '<' + '/script' + '>';
+                const chartCdnScript = '<' + 'script src="https://cdn.jsdelivr.net/npm/chart.js">' + '<' + '/script' + '>';
+
                 const htmlDoc = `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -8828,7 +8832,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Báo Cáo Chi Tiết Hiệu Quả P&L & Quyết Định Chiến Lược - Thu Hà AI Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    ${chartCdnScript}
     <style>
         body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 32px 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
@@ -8993,7 +8997,7 @@
         </div>
     </div>
 
-    <script>
+    ${tagScriptOpen}
         function initCharts() {
             if (typeof Chart === 'undefined') {
                 setTimeout(initCharts, 120);
@@ -9042,7 +9046,7 @@
         } else {
             initCharts();
         }
-    </script>
+    ${tagScriptClose}
 </body>
 </html>`;
 
