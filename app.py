@@ -132,6 +132,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/export_html_pnl":
             from core.html_exporter import StandaloneHtmlExporter
             summary = agent_instance.get_summary()
+            if not summary or not summary.get("pnl_table"):
+                try:
+                    raw = DataLoader.load_scenario("SCENARIO_1")
+                    summary = agent_instance.run_pipeline(raw_data=raw)
+                except Exception:
+                    pass
             html_content = StandaloneHtmlExporter.generate_pnl_report(summary)
             data = html_content.encode("utf-8")
             self.send_response(200)
@@ -144,6 +150,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/export_html_dashboard":
             from core.html_exporter import StandaloneHtmlExporter
             summary = agent_instance.get_summary()
+            if not summary or not summary.get("pnl_table"):
+                try:
+                    raw = DataLoader.load_scenario("SCENARIO_1")
+                    summary = agent_instance.run_pipeline(raw_data=raw)
+                except Exception:
+                    pass
             html_content = StandaloneHtmlExporter.generate_dashboard_overview(summary)
             data = html_content.encode("utf-8")
             self.send_response(200)
@@ -360,6 +372,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 summary = agent_instance.get_summary()
 
+            if not summary or not summary.get("pnl_table"):
+                try:
+                    raw = DataLoader.load_scenario("SCENARIO_1")
+                    summary = agent_instance.run_pipeline(raw_data=raw)
+                except Exception:
+                    pass
+
             from core.html_exporter import StandaloneHtmlExporter
             html_content = StandaloneHtmlExporter.generate_pnl_report(summary)
             data = html_content.encode("utf-8")
@@ -379,6 +398,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     summary = agent_instance.get_summary()
             except Exception:
                 summary = agent_instance.get_summary()
+
+            if not summary or not summary.get("pnl_table"):
+                try:
+                    raw = DataLoader.load_scenario("SCENARIO_1")
+                    summary = agent_instance.run_pipeline(raw_data=raw)
+                except Exception:
+                    pass
 
             from core.html_exporter import StandaloneHtmlExporter
             html_content = StandaloneHtmlExporter.generate_dashboard_overview(summary)
@@ -400,6 +426,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 summary = agent_instance.get_summary()
 
+            if not summary or not summary.get("pnl_table"):
+                try:
+                    raw = DataLoader.load_scenario("SCENARIO_1")
+                    summary = agent_instance.run_pipeline(raw_data=raw)
+                except Exception:
+                    pass
+
             from core.excel_exporter import ExcelReportExporter
             excel_path = ExcelReportExporter.export(summary, "exports/Bao_Cao_Hieu_Qua_Ban_Hang_ThuHa.xlsx")
             with open(excel_path, "rb") as f:
@@ -420,6 +453,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     summary = agent_instance.get_summary()
             except Exception:
                 summary = agent_instance.get_summary()
+
+            if not summary or not summary.get("pnl_table"):
+                try:
+                    raw = DataLoader.load_scenario("SCENARIO_1")
+                    summary = agent_instance.run_pipeline(raw_data=raw)
+                except Exception:
+                    pass
 
             data = safe_json_dumps(summary, indent=2).encode("utf-8")
             self.send_response(200)

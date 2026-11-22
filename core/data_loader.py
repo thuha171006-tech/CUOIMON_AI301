@@ -337,7 +337,14 @@ class DataLoader:
     @staticmethod
     def load_scenario(scenario_name: str = "normal") -> dict:
         """Convenience function to load one of the built-in test scenarios (normal, missing, boundary)."""
-        if scenario_name in ["standard", "default", "normal"]:
+        s_lower = str(scenario_name).lower()
+        if s_lower in ["standard", "default", "normal", "scenario_1", "scenario 1", "1"]:
+            scenario_name = "normal"
+        elif s_lower in ["missing", "scenario_2", "scenario 2", "2"]:
+            scenario_name = "missing"
+        elif s_lower in ["boundary", "scenario_3", "scenario 3", "3"]:
+            scenario_name = "boundary"
+        else:
             scenario_name = "normal"
         file_path = f"data/giahoa_dataset_{scenario_name}.xlsx"
         if not os.path.exists(file_path):

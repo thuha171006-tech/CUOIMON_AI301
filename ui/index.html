@@ -1349,6 +1349,13 @@
                         <div class="h-64 relative flex items-center justify-center">
                             <canvas id="chartSalesWave" class="w-full h-full"></canvas>
                         </div>
+                        <div id="singleAngleInsightBox" class="mt-4 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 leading-relaxed">
+                            <div class="flex items-center gap-1.5 font-bold text-[#183634] text-[11px] uppercase tracking-wider mb-1">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[#0d9488]"></i>
+                                <span>Phân Tích Chuyên Sâu Của AI:</span>
+                            </div>
+                            <p id="singleAngleInsightText" class="m-0 font-medium text-slate-600">Đang tổng hợp nhận định từ tập dữ liệu...</p>
+                        </div>
                     </div>
 
                     <!-- Right: Dynamic Top Items Ranking -->
@@ -4963,6 +4970,103 @@
             renderAuditTrail();
         }
 
+        function getChartInsight(angle, data) {
+            if (!data) return "Chưa có dữ liệu để phân tích biểu đồ.";
+            if (angle && angle.insight) return angle.insight;
+
+            const type = String(angle.type || angle.id || '').toLowerCase();
+            const title = String(angle.title || angle.name || '').toLowerCase();
+            const channels = (data.channel_breakdown || []).filter(c => c && c.channel && c.channel !== '--' && c.channel !== 'Khác' && (Number(c.net_revenue) || 0) > 0);
+            const products = (data.product_breakdown || []).filter(p => p && p.product_id && (Number(p.gross_revenue) || Number(p.net_revenue) || 0) > 0);
+            const timeline = (data.timeline_breakdown || []).filter(t => t && t.date && (Number(t.net_revenue) || 0) > 0);
+            const pnl = (data.pnl_table || []).filter(c => c && c.campaign_id && c.campaign_id !== 'ORGANIC' && (Number(c.net_revenue) || 0) > 0);
+            const regions = (data.region_breakdown || []).filter(r => r && r.region && r.region !== 'None' && (Number(r.net_revenue) || 0) > 0);
+            const kpis = data.financial_kpis || data.summary_kpis || {};
+
+            function fVND(v) { return Number(v || 0).toLocaleString('vi-VN') + ' đ'; }
+
+            // 1. Omnichannel / Kênh bán
+            if (type.includes('channel') || title.includes('kênh') || title.includes('omnichannel')) {
+                if (channels.length > 0) {
+                    const topCh = channels.reduce((prev, curr) => (Number(curr.net_revenue || 0) > Number(prev.net_revenue || 0)) ? curr : prev, channels[0]);
+                    const worstRet = channels.reduce((prev, curr) => {
+                        const rCurr = Number(curr.return_rate_pct || 0) || (Number(curr.return_amount || 0) / Math.max(Number(curr.gross_revenue || 1), 1) * 100);
+                        const rPrev = Number(prev.return_rate_pct || 0) || (Number(prev.return_amount || 0) / Math.max(Number(prev.gross_revenue || 1), 1) * 100);
+                        return rCurr > rPrev ? curr : prev;
+                    }, channels[0]);
+                    const retPct = Math.round((Number(worstRet.return_amount || 0) / Math.max(Number(worstRet.gross_revenue || 1), 1)) * 1000) / 10;
+                    return `Kênh <strong>"${topCh.channel}"</strong> đang giữ vị thế chủ lực với doanh thu thuần đạt ${fVND(topCh.net_revenue)}. Trong khi đó, kênh <strong>"${worstRet.channel}"</strong> ghi nhận tỷ lệ hoàn trả đáng chú ý (${retPct}%), cần rà soát lại tiêu chuẩn mô tả sản phẩm và quy trình đóng gói.`;
+                }
+                return "Phân phối doanh thu đa kênh phản ánh quy mô và tỷ trọng đóng góp giữa các điểm chạm khách hàng trực tuyến và trực tiếp.";
+            }
+
+            // 2. Product Pareto / Sản phẩm
+            if (type.includes('product') || title.includes('sản phẩm') || title.includes('pareto')) {
+                if (products.length > 0) {
+                    const topP = products[0];
+                    const topRev = Number(topP.gross_revenue || topP.net_revenue || 0);
+                    return `Mặt hàng <strong>"${topP.product_name || topP.product_id}"</strong> dẫn đầu danh mục với doanh số ${fVND(topRev)}. Nguyên lý Pareto 80/20 được thể hiện rõ: nhóm Top 3 mặt hàng đóng vai trò xương sống tạo ra phần lớn thặng dư gộp toàn dự án.`;
+                }
+                return "Cơ cấu sản phẩm phân bổ theo nguyên lý Pareto giúp tối ưu vòng quay tồn kho và tập trung nguồn lực vào danh mục đem lại biên lãi gộp cao nhất.";
+            }
+
+            // 3. Region / Địa bàn
+            if (type.includes('region') || title.includes('khu vực') || title.includes('địa bàn')) {
+                if (regions.length > 0) {
+                    const topReg = regions.reduce((p, c) => (Number(c.net_revenue || 0) > Number(p.net_revenue || 0)) ? c : p, regions[0]);
+                    return `Thị trường <strong>"${topReg.region}"</strong> là địa bàn trọng điểm, đóng góp ${topReg.revenue_share_pct || 0}% tổng doanh thu. Doanh nghiệp cần củng cố dịch vụ giao hàng nhanh tại đây đồng thời kích cầu tại các khu vực vệ tinh.`;
+                }
+                return "Phân bổ địa bàn thể hiện mức độ phủ sóng thị trường và sự đón nhận sản phẩm tại từng vùng miền địa lý.";
+            }
+
+            // 4. Timeline / Thời gian
+            if (type.includes('timeline') || title.includes('thời gian') || title.includes('daily')) {
+                if (timeline.length > 0) {
+                    const peak = timeline.reduce((p, c) => (Number(c.net_revenue || 0) > Number(p.net_revenue || 0)) ? c : p, timeline[0]);
+                    return `Đỉnh điểm phát sinh doanh thu ghi nhận vào chu kỳ <strong>"${peak.date || peak.period}"</strong> đạt ${fVND(peak.net_revenue)} (${peak.orders_count || 0} đơn). Nhịp độ phản ánh sức hút mạnh mẽ trong các ngày cao điểm khuyến mãi.`;
+                }
+                return "Đường cong diễn biến theo thời gian giúp theo dõi sát nhịp độ giao dịch và mức độ phản hồi của người tiêu dùng.";
+            }
+
+            // 5. Campaign Sales Wave / Chiến dịch
+            if (type.includes('campaign') || title.includes('chiến dịch') || title.includes('sales wave')) {
+                if (pnl.length > 0) {
+                    const best = pnl.reduce((p, c) => (Number(c.contribution_margin || 0) > Number(p.contribution_margin || 0)) ? c : p, pnl[0]);
+                    const worst = pnl.reduce((p, c) => (Number(c.contribution_margin || 0) < Number(p.contribution_margin || 0)) ? c : p, pnl[0]);
+                    return `Chiến dịch <strong>"${best.campaign_name || best.campaign_id}"</strong> đem lại biên đóng góp CM cao nhất (${fVND(best.contribution_margin)}). Trái lại, chiến dịch <strong>"${worst.campaign_name || worst.campaign_id}"</strong> có hiệu quả thấp nhất (${fVND(worst.contribution_margin)}), cần cắt giảm chi phí quảng cáo kém hiệu quả.`;
+                }
+                return "Hiệu quả chiến dịch Marketing phản ánh mối tương quan trực tiếp giữa chi phí tiếp thị bỏ ra và biên lợi nhuận thực thu về.";
+            }
+
+            // 6. Cost Structure / Chi phí
+            if (type.includes('cost') || title.includes('chi phí') || title.includes('cơ cấu chi phí')) {
+                const cogs = Number(kpis.total_cogs || 0);
+                const mkt = Number(kpis.total_campaign_costs || 0);
+                const disc = Number(kpis.total_discount_amount || 0);
+                if (cogs > mkt && cogs > disc) {
+                    return `Giá vốn hàng bán (COGS) chiếm tỷ trọng lớn nhất trong cấu trúc chi phí (${fVND(cogs)}). Doanh nghiệp cần đàm phán lại giá nhập sỉ hoặc tối ưu định mức nguyên vật liệu để nới rộng biên lãi.`;
+                } else if (mkt > cogs) {
+                    return `Chi phí Marketing & Tiếp thị đang chiếm tỷ trọng áp đảo (${fVND(mkt)}). Cần kiểm soát chặt chỉ số ROAS để tránh tình trạng "tăng trưởng nóng" nhưng thâm hụt dòng tiền.`;
+                }
+                return `Cơ cấu phân bổ dòng tiền giúp kiểm soát điểm hòa vốn và giữ vững tỷ lệ biên đóng góp (CM) lành mạnh trên mỗi đơn hàng.`;
+            }
+
+            // 7. Domain Specific (Manufacturing, Cohort, Store P&L, etc.)
+            if (angle && angle.labels && angle.datasets) {
+                if (title.includes('lỗi') || title.includes('chất lượng') || title.includes('phế phẩm')) {
+                    return `Dữ liệu thể hiện sự phân hóa chất lượng giữa các dây chuyền; các dây chuyền có tỷ lệ phế phẩm cao cần được tạm dừng để hiệu chỉnh cơ khí và kiểm tra sai số cảm biến.`;
+                }
+                if (title.includes('cohort') || title.includes('giữ chân')) {
+                    return `Tỷ lệ giữ chân khách hàng phản ánh mức độ hài lòng dài hạn; chu kỳ tháng đầu tiên sau kích hoạt là giai đoạn then chốt quyết định giá trị vòng đời khách hàng (LTV).`;
+                }
+                if (title.includes('cửa hàng') || title.includes('mặt bằng')) {
+                    return `Hiệu quả kinh doanh giữa các điểm bán thể hiện rõ vai trò của vị trí địa lý; các chi nhánh có chi phí thuê cao cần tối ưu doanh số trên từng mét vuông mặt sàn.`;
+                }
+            }
+
+            return `Phân tích dữ liệu theo <strong>"${angle.title || 'chiều chỉ số'}"</strong> cung cấp cơ sở định lượng để đánh giá hiệu suất vận hành và đưa ra quyết định hành động tối ưu.`;
+        }
+
         function renderStep5Charts(data) {
             const grid = document.getElementById('step5DynamicChartsGrid');
             if (!grid) return;
@@ -5186,15 +5290,25 @@
                 `;
             } else {
                 chartsToRender.forEach((spec, idx) => {
+                    const insightText = getChartInsight(spec, data);
                     const cardHtml = `
-                        <div class="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-2">
-                            <h4 class="text-xs font-bold text-[#183634] flex items-center justify-between">
-                                <span>${idx + 1}. ${spec.title}</span>
-                                <span class="text-[10px] font-semibold text-slate-400">${spec.unit}</span>
-                            </h4>
-                            ${spec.subtitle ? `<p class="text-[11px] text-slate-500 font-medium">${spec.subtitle}</p>` : ''}
-                            <div class="h-56 w-full relative">
-                                <canvas id="${spec.id}"></canvas>
+                        <div class="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col justify-between space-y-2">
+                            <div>
+                                <h4 class="text-xs font-bold text-[#183634] flex items-center justify-between">
+                                    <span>${idx + 1}. ${spec.title}</span>
+                                    <span class="text-[10px] font-semibold text-slate-400">${spec.unit}</span>
+                                </h4>
+                                ${spec.subtitle ? `<p class="text-[11px] text-slate-500 font-medium">${spec.subtitle}</p>` : ''}
+                                <div class="h-56 w-full relative my-2">
+                                    <canvas id="${spec.id}"></canvas>
+                                </div>
+                            </div>
+                            <div class="mt-2.5 p-2.5 rounded-xl bg-white border border-slate-200/80 text-[11px] text-slate-600 leading-relaxed shadow-2xs">
+                                <div class="flex items-center gap-1.5 font-bold text-[#183634] text-[10px] uppercase tracking-wider mb-1">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-[#0d9488]"></i>
+                                    <span>Phân Tích &amp; Nhận Định Dữ Liệu:</span>
+                                </div>
+                                <p class="m-0 text-slate-700 font-medium">${insightText}</p>
                             </div>
                         </div>
                     `;
@@ -5869,24 +5983,38 @@
             }
 
             // Render active chart cards - ONLY ACTIVE CARDS, ZERO EMPTY CANVASES!
-            multiContainer.innerHTML = activeAngles.map((a, idx) => `
+            multiContainer.innerHTML = activeAngles.map((a, idx) => {
+                const insightText = getChartInsight(a, data);
+                return `
                 <div class="bg-white rounded-3xl border border-slate-200/80 shadow-card p-5 flex flex-col justify-between hover:shadow-md transition">
-                    <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
-                        <div>
-                            <h4 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                                <i class="${a.icon}"></i> ${idx + 1}. ${a.title}
-                            </h4>
-                            <p class="text-[10px] text-slate-400 font-medium">${a.subtitle}</p>
+                    <div>
+                        <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                            <div>
+                                <h4 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                                    <i class="${a.icon}"></i> ${idx + 1}. ${a.title}
+                                </h4>
+                                <p class="text-[10px] text-slate-400 font-medium">${a.subtitle}</p>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 shrink-0">
+                                ${a.badge}
+                            </span>
                         </div>
-                        <span class="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 shrink-0">
-                            ${a.badge}
-                        </span>
+                        <div class="h-60 relative w-full flex items-center justify-center">
+                            <canvas id="dynChartCanvas_${a.id}" class="w-full h-full"></canvas>
+                        </div>
                     </div>
-                    <div class="h-60 relative w-full flex items-center justify-center">
-                        <canvas id="dynChartCanvas_${a.id}" class="w-full h-full"></canvas>
+                    <div class="mt-3 pt-2.5 border-t border-slate-100">
+                        <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-700 leading-relaxed">
+                            <div class="flex items-center gap-1.5 font-bold text-[#183634] text-[10px] uppercase tracking-wider mb-1">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[#0d9488]"></i>
+                                <span>Phân Tích Nhanh Từ Dữ Liệu:</span>
+                            </div>
+                            <p class="m-0 text-slate-600 font-medium">${insightText}</p>
+                        </div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
 
             // 6. Draw Charts for each active angle
             activeAngles.forEach(a => {
@@ -6232,6 +6360,10 @@
                 // 3. Render Chart for Selected Single Angle
                 if (lastApiResponse) {
                     renderSalesWaveChart(lastApiResponse, angle);
+                    const singleInsightEl = document.getElementById('singleAngleInsightText');
+                    if (singleInsightEl) {
+                        singleInsightEl.innerHTML = getChartInsight(domainAngle || { id: angle, type: angle.toLowerCase(), title: chartTitle ? chartTitle.innerText : angle }, lastApiResponse);
+                    }
                 }
             }
         }
@@ -8448,21 +8580,490 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Standalone Exports
-        function exportHtmlPnL() {
-            window.location.href = '/api/export_html_pnl';
+        // ===================================================================
+        // STANDALONE EXPORTS & ROBUST CLIENT-SIDE HTML GENERATOR
+        // ===================================================================
+
+        function getExportBusinessContext() {
+            const projectName = document.getElementById('ctxProjectName') ? document.getElementById('ctxProjectName').value.trim() : "Dự Án Bán Hàng Đa Kênh";
+            const businessType = document.getElementById('ctxBusinessType') ? document.getElementById('ctxBusinessType').value.trim() : "Bán lẻ & Thương mại điện tử";
+            const questions = document.getElementById('ctxQuestions') ? document.getElementById('ctxQuestions').value.trim() : "";
+            const fileName = (typeof uploadedFileName !== 'undefined' && uploadedFileName) ? uploadedFileName : "sample_data.csv";
+            return {
+                project_name: projectName || "Dự Án Phân Tích Dữ Liệu Doanh Nghiệp",
+                business_type: businessType || "Bán lẻ & Thương mại điện tử",
+                focus_question: questions,
+                questions: questions,
+                file_name: fileName
+            };
         }
 
-        function exportHtmlDashboard() {
-            window.location.href = '/api/export_html_dashboard';
+        async function exportHtmlPnL() {
+            if (!lastApiResponse || (!lastApiResponse.pnl_table && !lastApiResponse.financial_kpis && !lastApiResponse.domain_kpis)) {
+                showToast('⚠️ Vui lòng hoàn tất phân tích dữ liệu ở Bước 3 trước khi xuất Báo cáo P&L!', 'warning');
+                return;
+            }
+            showToast('⏳ Đang tổng hợp báo cáo P&L đầy đủ...', 'info');
+
+            const payload = Object.assign({}, lastApiResponse, {
+                business_context: getExportBusinessContext()
+            });
+
+            try {
+                const res = await fetch('/api/export_html_pnl', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = `Bao_Cao_Chi_Tiet_PnL_ThuHa_${new Date().toISOString().slice(0,10)}.html`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(downloadUrl);
+                    showToast('✅ Xuất Báo Cáo P&L HTML thành công!', 'success');
+                    return;
+                }
+                throw new Error('Máy chủ phản hồi mã ' + res.status);
+            } catch (err) {
+                console.warn('Lỗi gọi API xuất báo cáo, kích hoạt chế độ tạo HTML trực tiếp từ trình duyệt:', err);
+                generateClientSidePnLHtml(payload);
+            }
         }
 
-        function exportExcel() {
-            window.location.href = '/api/export_excel';
+        async function exportHtmlDashboard() {
+            if (!lastApiResponse || (!lastApiResponse.pnl_table && !lastApiResponse.financial_kpis && !lastApiResponse.domain_kpis)) {
+                showToast('⚠️ Vui lòng hoàn tất phân tích dữ liệu ở Bước 3 trước khi xuất Dashboard!', 'warning');
+                return;
+            }
+            showToast('⏳ Đang kết xuất Dashboard tổng quan...', 'info');
+
+            const payload = Object.assign({}, lastApiResponse, {
+                business_context: getExportBusinessContext()
+            });
+
+            try {
+                const res = await fetch('/api/export_html_dashboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = `Dashboard_Tong_Quan_ThuHa_${new Date().toISOString().slice(0,10)}.html`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(downloadUrl);
+                    showToast('✅ Xuất Dashboard HTML thành công!', 'success');
+                    return;
+                }
+                throw new Error('Máy chủ phản hồi mã ' + res.status);
+            } catch (err) {
+                console.warn('Lỗi gọi API xuất Dashboard, kích hoạt chế độ tạo Dashboard trực tiếp từ trình duyệt:', err);
+                generateClientSideDashboardHtml(payload);
+            }
+        }
+
+        async function exportExcel() {
+            if (!lastApiResponse || (!lastApiResponse.pnl_table && !lastApiResponse.financial_kpis)) {
+                showToast('⚠️ Vui lòng hoàn tất phân tích dữ liệu trước khi xuất tệp Excel!', 'warning');
+                return;
+            }
+            showToast('⏳ Đang tạo tệp Excel phân tích...', 'info');
+
+            const payload = Object.assign({}, lastApiResponse, {
+                business_context: getExportBusinessContext()
+            });
+
+            try {
+                const res = await fetch('/api/export_excel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = `Bao_Cao_Hieu_Qua_Ban_Hang_ThuHa_${new Date().toISOString().slice(0,10)}.xlsx`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(downloadUrl);
+                    showToast('✅ Xuất tệp Excel thành công!', 'success');
+                    return;
+                }
+                throw new Error('Máy chủ phản hồi mã ' + res.status);
+            } catch (err) {
+                console.warn('Lỗi xuất Excel qua API, tải bảng P&L CSV thay thế:', err);
+                downloadPnLCsvFallback(payload);
+            }
         }
 
         function exportJSON() {
-            window.location.href = '/api/export_json';
+            if (!lastApiResponse) {
+                showToast('⚠️ Chưa có dữ liệu phân tích để xuất JSON!', 'warning');
+                return;
+            }
+            try {
+                const payload = Object.assign({}, lastApiResponse, {
+                    business_context: getExportBusinessContext(),
+                    exported_at: new Date().toISOString()
+                });
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `Bao_Cao_Danh_Gia_Hieu_Qua_ThuHa_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+                showToast('✅ Xuất tệp JSON thành công!', 'success');
+            } catch (e) {
+                console.error('Export JSON error:', e);
+                showToast('❌ Không thể xuất JSON: ' + e.message, 'error');
+            }
+        }
+
+        function downloadPnLCsvFallback(summary) {
+            try {
+                const pnl = summary.pnl_table || [];
+                if (!pnl.length) {
+                    showToast('⚠️ Không có dữ liệu P&L để xuất CSV.', 'warning');
+                    return;
+                }
+                const headers = ["Chiến dịch", "Doanh thu thuần", "Giá vốn (COGS)", "Chiết khấu", "Hàng hoàn", "Chi phí MKT", "Biên đóng góp (CM)", "% Biên CM", "ROAS", "ROI", "Đánh giá"];
+                const rows = pnl.map(r => [
+                    `"${(r.campaign_name || r.campaign_id || '').replace(/"/g, '""')}"`,
+                    r.net_revenue || 0,
+                    r.cogs || 0,
+                    r.discount || 0,
+                    r.return_amount || 0,
+                    r.mkt_cost || 0,
+                    r.contribution_margin || 0,
+                    `"${r.cm_pct || 0}%"`,
+                    r.roas || 0,
+                    `"${r.roi || 0}%"`,
+                    `"${(r.status || r.decision || '').replace(/"/g, '""')}"`
+                ]);
+                const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Bao_Cao_PnL_ThuHa_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                showToast('✅ Đã xuất tệp CSV P&L thành công!', 'success');
+            } catch (err) {
+                console.error('Export CSV error:', err);
+                showToast('❌ Lỗi khi xuất CSV: ' + err.message, 'error');
+            }
+        }
+
+        function generateClientSidePnLHtml(summary) {
+            try {
+                const ctx = summary.business_context || {};
+                const projName = ctx.project_name || "Dự Án Bán Hàng Đa Kênh";
+                const bizType = ctx.business_type || "Bán lẻ & Thương mại điện tử";
+                const fileName = ctx.file_name || "Dữ liệu khảo sát thực tế";
+                const question = ctx.focus_question || (summary.question_sufficiency && summary.question_sufficiency.user_question) || "Phân tích toàn diện hiệu quả P&L & tối ưu hóa vận hành";
+
+                const fin = summary.financial_kpis || summary.summary_kpis || {};
+                const netRev = fin.total_net_revenue || fin.net_revenue || 0;
+                const cm = fin.total_contribution_margin || fin.contribution_margin || 0;
+                const cmPct = fin.cm_pct || fin.margin_pct || 0;
+                const roiPct = fin.roi_pct || fin.roi || 0;
+                const mkt = fin.total_campaign_costs || fin.total_expenses || 0;
+                const returns = fin.total_return_amount || fin.return_amount || 0;
+                const orders = fin.total_orders || fin.order_count || (summary.cleaned_orders_table ? summary.cleaned_orders_table.length : 0);
+                const roas = fin.roas || 0;
+
+                const pnl = summary.pnl_table || [];
+                const channels = summary.channel_breakdown || [];
+                const products = summary.product_breakdown || [];
+                const timeline = summary.timeline_breakdown || [];
+                const matrix = summary.problem_solution_matrix || [];
+                const audit = summary.audit_trail || [];
+
+                function fVND(v) { return Number(v || 0).toLocaleString('vi-VN') + ' đ'; }
+                function fNum(v, u='') { return Number(v || 0).toLocaleString('vi-VN') + (u ? ' ' + u : ''); }
+
+                const pnlRowsHtml = pnl.length ? pnl.map((r, i) => `
+                    <tr style="border-bottom: 1px solid #f1f5f9; ${i%2===1?'background:#fafafa;':''}">
+                        <td style="padding: 10px 14px; font-weight: bold; color: #1e293b;">${r.campaign_name || r.campaign_id || ('Chiến dịch ' + (i+1))}</td>
+                        <td style="padding: 10px 14px; text-align: right; font-weight: 700; color: #0d9488;">${fVND(r.net_revenue)}</td>
+                        <td style="padding: 10px 14px; text-align: right; color: #64748b;">${fVND(r.cogs)}</td>
+                        <td style="padding: 10px 14px; text-align: right; color: #64748b;">${fVND(r.discount)}</td>
+                        <td style="padding: 10px 14px; text-align: right; color: #e11d48;">${fVND(r.return_amount)}</td>
+                        <td style="padding: 10px 14px; text-align: right; color: #0284c7;">${fVND(r.mkt_cost)}</td>
+                        <td style="padding: 10px 14px; text-align: right; font-weight: 800; color: ${Number(r.contribution_margin||0)>=0?'#0d9488':'#e11d48'};">${fVND(r.contribution_margin)}</td>
+                        <td style="padding: 10px 14px; text-align: center; font-weight: 700;">${r.cm_pct || 0}%</td>
+                        <td style="padding: 10px 14px; text-align: center; font-weight: 700; color: #0284c7;">${r.roas || 0}x</td>
+                        <td style="padding: 10px 14px; text-align: center;">
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 800; background: ${Number(r.contribution_margin||0)>=0?'#c5dedd50':'#fad2e150'}; color: ${Number(r.contribution_margin||0)>=0?'#183634':'#872D43'};">
+                                ${r.status || (Number(r.contribution_margin||0)>=0?'HIỆU QUẢ CAO':'CẦN TỐI ƯU')}
+                            </span>
+                        </td>
+                        <td style="padding: 10px 14px; font-size: 11px; color: #334155;">${r.action_recommendation || r.decision || 'Duy trì & kiểm soát chi phí'}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="11" style="padding: 24px; text-align: center; color: #94a3b8;">Chưa có dữ liệu thống kê P&L.</td></tr>';
+
+                const htmlDoc = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Cáo Chi Tiết Hiệu Quả P&L & Quyết Định Chiến Lược - Thu Hà AI Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 32px 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section-box { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .section-title { font-size: 15px; font-weight: 900; color: #183634; text-transform: uppercase; margin: 0 0 16px 0; display: flex; align-items: center; justify-content: space-between; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #f8fafc; color: #475569; font-weight: 800; padding: 12px 14px; text-transform: uppercase; font-size: 10px; border-bottom: 2px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- PHẦN 1 -->
+        <div class="section-box" style="background: linear-gradient(135deg, #183634 0%, #224e4a 100%); color: white; border: none;">
+            <div style="font-size: 11px; font-weight: 800; color: #c5dedd; margin-bottom: 6px;">BÁN LẺ & THƯƠNG MẠI ĐIỆN TỬ • 100% ĐỦ ĐIỀU KIỆN SỐ LIỆU</div>
+            <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 900;">PHẦN 1: BỐI CẢNH DỰ ÁN & NGUỒN DỮ LIỆU ĐỐI SOÁT</h1>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 12px; background: rgba(255,255,255,0.08); padding: 14px 18px; border-radius: 14px;">
+                <div><span style="color: #94a3b8;">Dự Án / Thương Hiệu:</span> <br><strong style="color: white; font-size: 13px;">${projName}</strong></div>
+                <div><span style="color: #94a3b8;">Loại Hình Doanh Nghiệp:</span> <br><strong style="color: white; font-size: 13px;">${bizType}</strong></div>
+                <div><span style="color: #94a3b8;">Tập Dữ Liệu Khảo Sát:</span> <br><strong style="color: white; font-size: 13px;">${fileName}</strong></div>
+                <div><span style="color: #94a3b8;">Vấn Đề Trọng Tâm:</span> <br><strong style="color: #fef08a; font-size: 12px;">"${question}"</strong></div>
+            </div>
+        </div>
+
+        <!-- PHẦN 2 -->
+        <div class="section-box">
+            <div class="section-title"><span>📌 PHẦN 2: DASHBOARD KPI KINH DOANH & VẬN HÀNH TRỌNG TÂM</span><span style="font-size: 11px; color: #64748b;">Chỉ số cốt lõi</span></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                <div style="background: #c5dedd35; border: 1.5px solid #9ec8c6; border-radius: 16px; padding: 18px 20px;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #183634;">DOANH THU THUẦN</div>
+                    <div style="font-size: 24px; font-weight: 900; color: #183634; margin: 8px 0 4px 0; font-family: monospace;">${fVND(netRev)}</div>
+                    <div style="font-size: 11px; color: #475569;">Đã trừ hàng hoàn ${fVND(returns)}</div>
+                </div>
+                <div style="background: #fad2e135; border: 1.5px solid #f2a8c0; border-radius: 16px; padding: 18px 20px;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #872D43;">BIÊN ĐÓNG GÓP (CM) ★</div>
+                    <div style="font-size: 24px; font-weight: 900; color: #872D43; margin: 8px 0 4px 0; font-family: monospace;">${fVND(cm)}</div>
+                    <div style="font-size: 11px; color: #475569;">Biên CM: ${cmPct}% • ROI: ${roiPct}%</div>
+                </div>
+                <div style="background: #e0f2fe35; border: 1.5px solid #bae6fd; border-radius: 16px; padding: 18px 20px;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0369a1;">CHI PHÍ CHIẾN DỊCH & MKT</div>
+                    <div style="font-size: 24px; font-weight: 900; color: #0369a1; margin: 8px 0 4px 0; font-family: monospace;">${fVND(mkt)}</div>
+                    <div style="font-size: 11px; color: #475569;">Hiệu quả ROAS: ${roas}x</div>
+                </div>
+                <div style="background: #fef3c735; border: 1.5px solid #fde68a; border-radius: 16px; padding: 18px 20px;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #92400e;">QUY MÔ ĐƠN HÀNG ĐỐI SOÁT</div>
+                    <div style="font-size: 24px; font-weight: 900; color: #92400e; margin: 8px 0 4px 0; font-family: monospace;">${fNum(orders, 'Đơn')}</div>
+                    <div style="font-size: 11px; color: #475569;">100% Chuẩn hóa & Khử trùng dữ liệu</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PHẦN 3 -->
+        <div class="section-box">
+            <div class="section-title"><span>📊 PHẦN 3: PHÂN TÍCH DỮ LIỆU ĐA CHIỀU & BẢNG SỐ LIỆU ĐỐI SOÁT</span><span style="font-size: 11px; color: #64748b;">Trực quan & Bảng chi tiết</span></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 18px; margin-bottom: 24px;">
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <strong style="font-size: 13px; color: #183634; display: block; margin-bottom: 12px;">1. Phân Phối Doanh Thu Theo Kênh Bán (Omnichannel)</strong>
+                        <div style="height: 240px;"><canvas id="chartChannels"></canvas></div>
+                    </div>
+                    <div style="margin-top: 14px; padding: 10px 14px; background: #f8fafc; border-left: 3px solid #0d9488; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #334155;">
+                        <div style="font-weight: 800; color: #183634; font-size: 10px; text-transform: uppercase; margin-bottom: 4px;">💡 Phân Tích &amp; Nhận Định Dữ Liệu:</div>
+                        <div>${getChartInsight({ type: 'channel', title: 'Kênh Bán' }, summary)}</div>
+                    </div>
+                </div>
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <strong style="font-size: 13px; color: #183634; display: block; margin-bottom: 12px;">2. Cơ Cấu Chi Phí &amp; Lợi Nhuận (Cost Breakdown)</strong>
+                        <div style="height: 240px;"><canvas id="chartCosts"></canvas></div>
+                    </div>
+                    <div style="margin-top: 14px; padding: 10px 14px; background: #f8fafc; border-left: 3px solid #0d9488; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #334155;">
+                        <div style="font-weight: 800; color: #183634; font-size: 10px; text-transform: uppercase; margin-bottom: 4px;">💡 Phân Tích &amp; Nhận Định Dữ Liệu:</div>
+                        <div>${getChartInsight({ type: 'cost', title: 'Cơ Cấu Chi Phí' }, summary)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 800; color: #183634; margin: 0 0 12px 0;">BẢNG PHÂN TÍCH HIỆU QUẢ P&L CHI TIẾT CÁC CHIẾN DỊCH (ĐƠN VỊ TÍNH: VNĐ)</h4>
+                <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 14px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Chiến Dịch</th>
+                                <th style="text-align: right;">Doanh Thu Thuần</th>
+                                <th style="text-align: right;">Giá Vốn (COGS)</th>
+                                <th style="text-align: right;">Chiết Khấu</th>
+                                <th style="text-align: right;">Hàng Hoàn</th>
+                                <th style="text-align: right;">Chi Phí MKT</th>
+                                <th style="text-align: right;">Biên Đóng Góp (CM)</th>
+                                <th style="text-align: center;">% CM</th>
+                                <th style="text-align: center;">ROAS</th>
+                                <th style="text-align: center;">Đánh Giá</th>
+                                <th style="text-align: left;">Khuyến Nghị Chiến Lược</th>
+                            </tr>
+                        </thead>
+                        <tbody>${pnlRowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PHẦN 4: CHUYÊN ĐỀ -->
+        <div class="section-box">
+            <div class="section-title"><span>🔍 PHẦN 4: BÁO CÁO PHÂN TÍCH CHUYÊN ĐỀ SÂU</span><span style="font-size: 11px; color: #64748b;">Kênh, Sản phẩm & Tiến trình</span></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+                <div style="border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px;">
+                    <strong style="color: #183634; font-size: 12px; display: block; margin-bottom: 8px;">Top Kênh Bán Hàng</strong>
+                    <table style="font-size: 11px;">
+                        <thead><tr><th>Kênh</th><th style="text-align: right;">Doanh Thu</th><th style="text-align: right;">Tỷ trọng</th></tr></thead>
+                        <tbody>
+                            ${channels.slice(0, 5).map(c => `<tr><td>${c.channel}</td><td style="text-align: right; font-weight: 700;">${fVND(c.net_revenue)}</td><td style="text-align: right;">${c.share_pct || c.revenue_share_pct || 0}%</td></tr>`).join('') || '<tr><td colspan="3" style="text-align: center;">Chưa có dữ liệu</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px;">
+                    <strong style="color: #183634; font-size: 12px; display: block; margin-bottom: 8px;">Top Sản Phẩm Bán Chạy (Pareto 80/20)</strong>
+                    <table style="font-size: 11px;">
+                        <thead><tr><th>Sản Phẩm</th><th style="text-align: right;">Doanh Thu</th><th style="text-align: right;">Số Lượng</th></tr></thead>
+                        <tbody>
+                            ${products.slice(0, 5).map(p => `<tr><td>${p.product_id}</td><td style="text-align: right; font-weight: 700;">${fVND(p.net_revenue || p.gross_revenue)}</td><td style="text-align: right;">${p.quantity || p.orders_count || '--'}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align: center;">Chưa có dữ liệu</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PHẦN 5: CHẨN ĐOÁN & GIẢI PHÁP -->
+        <div class="section-box">
+            <div class="section-title"><span>💡 PHẦN 5: CHẨN ĐOÁN NGUYÊN NHÂN GỐC RỄ & HỆ THỐNG GIẢI PHÁP</span><span style="font-size: 11px; color: #64748b;">Root Cause Analysis & Strategic Levers</span></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">
+                ${matrix.length ? matrix.map(m => `
+                    <div style="border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; background: #fafafa;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <strong style="color: #872D43; font-size: 12px;">⚠️ ${m.problem_type || m.finding || 'Vấn Đề Phát Hiện'}</strong>
+                            <span style="font-size: 10px; font-weight: bold; background: #fad2e1; color: #872D43; padding: 2px 8px; border-radius: 9999px;">${m.risk_level || 'RỦI RO'}</span>
+                        </div>
+                        <p style="font-size: 11px; color: #475569; margin: 0 0 10px 0;"><strong>Nguyên nhân:</strong> ${m.root_cause || m.impact_description || '--'}</p>
+                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; font-size: 11px; color: #183634;">
+                            <strong>🚀 Giải pháp đề xuất:</strong> ${m.solution_action || m.suggested_action || '--'}
+                        </div>
+                    </div>
+                `).join('') : '<p style="font-size: 12px; color: #64748b; padding: 12px;">Không phát hiện điểm nghẽn nghiêm trọng trong tập dữ liệu.</p>'}
+            </div>
+        </div>
+
+        <!-- PHẦN 6: KẾT LUẬN & KIỂM TOÁN -->
+        <div class="section-box">
+            <div class="section-title"><span>🎯 PHẦN 6: KẾT LUẬN ĐIỀU HÀNH & NHẬT KÝ KIỂM TOÁN</span><span style="font-size: 11px; color: #64748b;">AI Executive Summary • Thu Hà Certified</span></div>
+            <div style="background: #c5dedd20; border: 1.5px solid #c5dedd; border-radius: 14px; padding: 16px; margin-bottom: 20px; font-size: 12px; line-height: 1.6; color: #183634;">
+                <strong style="display: block; margin-bottom: 6px; font-size: 13px;">Nhận định điều hành tổng thể:</strong>
+                ${summary.ai_executive_insights || 'Hệ thống đã hoàn tất phân tích toàn diện đối soát P&L, cơ cấu dòng tiền, phân bổ đa kênh và các điểm nghẽn chi phí.'}
+            </div>
+            <h4 style="font-size: 12px; font-weight: 800; color: #183634; margin: 0 0 10px 0;">Truy vết kiểm toán tiến trình (Audit Trail):</h4>
+            <div style="max-height: 240px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <table style="font-size: 11px;">
+                    <thead><tr><th>Thời Gian</th><th>Bước Xử Lý</th><th>Thao Tác</th><th>Chi Tiết</th></tr></thead>
+                    <tbody>
+                        ${audit.map(a => `<tr><td style="color:#64748b;">${a.timestamp || '--'}</td><td><strong>${a.step || '--'}</strong></td><td>${a.action || '--'}</td><td>${a.message || '--'}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function initCharts() {
+            if (typeof Chart === 'undefined') {
+                setTimeout(initCharts, 120);
+                return;
+            }
+            try {
+                const chanCtx = document.getElementById('chartChannels');
+                if (chanCtx) {
+                    new Chart(chanCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ${JSON.stringify(channels.map(c => c.channel || 'Kênh'))},
+                            datasets: [{
+                                label: 'Doanh Thu Thuần (Tr. đ)',
+                                data: ${JSON.stringify(channels.map(c => Math.round((Number(c.net_revenue) || 0) / 1e6 * 10) / 10))},
+                                backgroundColor: '#72efdd',
+                                borderColor: '#0d9488',
+                                borderWidth: 1.5,
+                                borderRadius: 6
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+
+                const costCtx = document.getElementById('chartCosts');
+                if (costCtx) {
+                    new Chart(costCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Giá vốn (COGS)', 'Chi phí MKT', 'Biên đóng góp (CM)'],
+                            datasets: [{
+                                data: [${Math.round((Number(fin.total_cogs || 0))/1e6)}, ${Math.round((Number(fin.total_campaign_costs || 0))/1e6)}, ${Math.max(0, Math.round((Number(fin.total_contribution_margin || 0))/1e6))}],
+                                backgroundColor: ['#b5e2fa', '#fed9b7', '#72efdd']
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+            } catch(e) {
+                console.warn('Chart render note:', e);
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initCharts);
+        } else {
+            initCharts();
+        }
+    </script>
+</body>
+</html>`;
+
+                const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8;' });
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `Bao_Cao_Chi_Tiet_PnL_ThuHa_${new Date().toISOString().slice(0,10)}.html`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+                showToast('✅ Đã xuất Báo Cáo P&L HTML hoàn chỉnh thành công!', 'success');
+            } catch (e) {
+                console.error('generateClientSidePnLHtml error:', e);
+                showToast('❌ Lỗi tạo báo cáo HTML: ' + e.message, 'error');
+            }
+        }
+
+        function generateClientSideDashboardHtml(summary) {
+            generateClientSidePnLHtml(summary);
         }
 
         function signAndLockReport() {

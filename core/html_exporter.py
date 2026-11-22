@@ -192,6 +192,18 @@ class StandaloneHtmlExporter:
                     for ds in datasets
                 )
                 if has_data:
+                    title_l = (angle.get("title") or "").lower()
+                    da_insight = angle.get("insight") or angle.get("analysis") or angle.get("summary")
+                    if not da_insight:
+                        if any(k in title_l for k in ["lỗi", "chất lượng", "phế phẩm"]):
+                            da_insight = "Dữ liệu thể hiện sự phân hóa chất lượng giữa các dây chuyền; các dây chuyền có tỷ lệ lỗi vượt ngưỡng trần 1.0% cần bảo trì kỹ thuật và thay thế linh kiện mòn ngay lập tức."
+                        elif any(k in title_l for k in ["cohort", "giữ chân", "retention"]):
+                            da_insight = "Đường cong giữ chân khách hàng giảm mạnh nhất sau chu kỳ đầu tiên; cần tăng cường kịch bản re-marketing và chăm sóc sau bán trong 30 ngày đầu."
+                        elif any(k in title_l for k in ["cửa hàng", "store", "mặt bằng"]):
+                            da_insight = "Hiệu quả kinh doanh giữa các điểm bán thể hiện sự phân hóa rõ rệt; điểm bán có chi phí thuê mặt bằng cao cần tái cơ cấu diện tích hoặc đẩy mạnh bán hàng đa kênh."
+                        else:
+                            da_insight = f"Phân tích theo {angle.get('title') or 'chiều chỉ số'} giúp làm rõ sự phân bổ số liệu thực tế, hỗ trợ các quyết định điều hành có trọng tâm."
+
                     charts.append({
                         "id": f"chart_domain_{idx}",
                         "title": angle.get("title") or angle.get("name", f"Góc nhìn phân tích {idx+1}"),
@@ -200,7 +212,8 @@ class StandaloneHtmlExporter:
                         "type": angle.get("chartType") or "bar",
                         "labels": labels,
                         "datasets": datasets,
-                        "is_wide": len(labels) > 6 or angle.get("chartType") == "line"
+                        "is_wide": len(labels) > 6 or angle.get("chartType") == "line",
+                        "insight": da_insight
                     })
 
         # 2. Standard Business / P&L charts (Only if financial and have real data)
@@ -223,6 +236,11 @@ class StandaloneHtmlExporter:
                 else:
                     ch_datasets.append({"label": "Doanh Thu Thuần (Tr. đ)", "data": [round(float(c.get("net_revenue", 0)) / 1e6, 2) for c in valid_channels], "backgroundColor": "#72efdd", "borderColor": "#0d9488", "borderWidth": 1.5, "borderRadius": 6})
 
+                top_ch = max(valid_channels, key=lambda c: float(c.get("net_revenue") or 0))
+                worst_ret_ch = max(valid_channels, key=lambda c: float(c.get("return_rate_pct") or (float(c.get("return_amount") or 0) / max(float(c.get("gross_revenue") or 1), 1) * 100)))
+                ret_pct = round(float(worst_ret_ch.get("return_amount") or 0) / max(float(worst_ret_ch.get("gross_revenue") or 1), 1) * 100, 1)
+                ch_insight = f"Kênh <strong>'{top_ch.get('channel')}'</strong> đang giữ vị thế chủ lực với doanh thu thuần đạt {cls._format_vnd(top_ch.get('net_revenue'))}. Trong khi đó, kênh <strong>'{worst_ret_ch.get('channel')}'</strong> ghi nhận tỷ lệ hoàn trả cao ({ret_pct}%), cần rà soát lại chính sách đóng gói và chất lượng vận chuyển."
+
                 charts.append({
                     "id": "chart_std_channel",
                     "title": "Phân Phối Đa Kênh (Omnichannel)",
@@ -231,7 +249,8 @@ class StandaloneHtmlExporter:
                     "type": "bar",
                     "labels": ch_labels,
                     "datasets": ch_datasets,
-                    "is_wide": len(ch_labels) > 6
+                    "is_wide": len(ch_labels) > 6,
+                    "insight": ch_insight
                 })
 
             regions = summary.get("region_breakdown") or []
@@ -240,6 +259,9 @@ class StandaloneHtmlExporter:
                 reg_labels = [f"{r.get('region')} ({r.get('revenue_share_pct', 0)}%)" for r in valid_regions]
                 reg_data = [round(float(r.get("net_revenue", 0)) / 1e6, 2) for r in valid_regions]
                 reg_colors = ["#72efdd", "#f4978e", "#a0c4ff", "#fed9b7", "#d8b4e2", "#80ed99"][:len(valid_regions)]
+                top_reg = max(valid_regions, key=lambda r: float(r.get("net_revenue") or 0))
+                reg_insight = f"Thị trường khu vực <strong>'{top_reg.get('region')}'</strong> chiếm tỷ trọng chi phối ({top_reg.get('revenue_share_pct', 0)}% tổng doanh số). Doanh nghiệp nên duy trì lợi thế tại đây đồng thời khai thác thêm các khu vực vệ tinh tiềm năng."
+
                 charts.append({
                     "id": "chart_std_region",
                     "title": "Phân Phối Thị Phần Theo Khu Vực",
@@ -253,13 +275,18 @@ class StandaloneHtmlExporter:
                         "borderColor": "#ffffff",
                         "borderWidth": 2
                     }],
-                    "is_wide": False
+                    "is_wide": False,
+                    "insight": reg_insight
                 })
 
             products = summary.get("product_breakdown") or []
             valid_prods = [p for p in products if p.get("product_id") and not any(k in str(p.get("product_id")) for k in ["--", "Không có", "Chung"]) and (float(p.get("gross_revenue") or p.get("net_revenue") or 0) > 0)][:6]
             if valid_prods and not any("sản phẩm" in c["title"].lower() for c in charts):
                 prod_labels = [f"{p.get('product_id')} - {p.get('product_name', '')}".strip(" -") for p in valid_prods]
+                top_p = valid_prods[0]
+                top_p_rev = float(top_p.get("gross_revenue") or top_p.get("net_revenue") or 0)
+                prod_insight = f"Mặt hàng <strong>'{top_p.get('product_name') or top_p.get('product_id')}'</strong> là sản phẩm bán chạy số 1 với doanh số đạt {cls._format_vnd(top_p_rev)}. Nhóm Top 3 sản phẩm dẫn đầu đóng góp phần lớn doanh thu và biên lợi nhuận toàn danh mục (chuẩn quy luật Pareto 80/20)."
+
                 charts.append({
                     "id": "chart_std_products",
                     "title": "Cơ Cấu Sản Phẩm Bán Chạy (Pareto 80/20)",
@@ -271,7 +298,8 @@ class StandaloneHtmlExporter:
                         {"label": "Doanh Thu Gộp (Tr. đ)", "data": [round(float(p.get("gross_revenue", 0)) / 1e6, 2) for p in valid_prods], "backgroundColor": "#a0c4ff", "borderColor": "#0284c7", "borderWidth": 1.5, "borderRadius": 6},
                         {"label": "Lợi Nhuận Gộp (Tr. đ)", "data": [round(float(p.get("gross_profit", 0)) / 1e6, 2) for p in valid_prods], "backgroundColor": "#fed9b7", "borderColor": "#d97706", "borderWidth": 1.5, "borderRadius": 6}
                     ],
-                    "is_wide": False
+                    "is_wide": False,
+                    "insight": prod_insight
                 })
 
             timeline = summary.get("timeline_breakdown") or []
@@ -285,6 +313,9 @@ class StandaloneHtmlExporter:
                     time_datasets.append(
                         {"label": "Số Đơn Hàng", "data": [int(t.get("orders_count", 0)) for t in valid_time], "borderColor": "#fad2e1", "backgroundColor": "rgba(244, 151, 142, 0.35)", "fill": False, "tension": 0.35, "pointRadius": 3, "borderWidth": 2, "borderDash": [3, 3]}
                     )
+                peak_day = max(valid_time, key=lambda t: float(t.get("net_revenue") or 0))
+                time_insight = f"Điểm cực đại doanh thu ghi nhận vào chu kỳ <strong>'{peak_day.get('date')}'</strong> đạt {cls._format_vnd(peak_day.get('net_revenue'))} ({peak_day.get('orders_count', 0)} đơn). Nhịp độ doanh thu phản ánh rõ tác động từ các đợt phát động chiến dịch tiếp thị và hành vi chi tiêu theo chu kỳ của khách hàng."
+
                 charts.append({
                     "id": "chart_std_timeline",
                     "title": "Xu Hướng Doanh Số & Số Lượng Đơn Theo Thời Gian",
@@ -293,7 +324,8 @@ class StandaloneHtmlExporter:
                     "type": "line",
                     "labels": time_labels,
                     "datasets": time_datasets,
-                    "is_wide": True
+                    "is_wide": True,
+                    "insight": time_insight
                 })
 
             pnl = summary.get("pnl_table") or []
@@ -302,6 +334,10 @@ class StandaloneHtmlExporter:
                 valid_camps = [p for p in pnl if (float(p.get("net_revenue") or 0) > 0)]
             if len(valid_camps) > 1 and not any("chiến dịch" in c["title"].lower() or "sales wave" in c["title"].lower() for c in charts):
                 camp_labels = [str(p.get("campaign_name") or p.get("campaign_id")) for p in valid_camps]
+                best_camp = max(valid_camps, key=lambda p: float(p.get("contribution_margin") or 0))
+                worst_camp = min(valid_camps, key=lambda p: float(p.get("contribution_margin") or 0))
+                camp_insight = f"Chiến dịch <strong>'{best_camp.get('campaign_name') or best_camp.get('campaign_id')}'</strong> đem lại biên đóng góp CM cao nhất ({cls._format_vnd(best_camp.get('contribution_margin'))}). Ngược lại, chiến dịch <strong>'{worst_camp.get('campaign_name') or worst_camp.get('campaign_id')}'</strong> có hiệu quả thấp nhất ({cls._format_vnd(worst_camp.get('contribution_margin'))}), cần xem xét điều chỉnh ngân sách tiếp thị hoặc mức chiết khấu."
+
                 charts.append({
                     "id": "chart_std_campaign",
                     "title": "Hiệu Quả Chiến Dịch Marketing & Biên Đóng Góp (Sales Wave)",
@@ -313,7 +349,8 @@ class StandaloneHtmlExporter:
                         {"label": "Doanh Thu Thuần (Tr. đ)", "data": [round(float(p.get("net_revenue", 0)) / 1e6, 2) for p in valid_camps], "borderColor": "#0d9488", "backgroundColor": "rgba(114, 239, 221, 0.35)", "fill": True, "tension": 0.35, "pointRadius": 4, "borderWidth": 2.5},
                         {"label": "Biên Đóng Góp CM (Tr. đ)", "data": [round(float(p.get("contribution_margin", 0)) / 1e6, 2) for p in valid_camps], "borderColor": "#e11d48", "backgroundColor": "rgba(244, 151, 142, 0.45)", "fill": True, "tension": 0.35, "pointRadius": 4, "borderWidth": 2.5}
                     ],
-                    "is_wide": True
+                    "is_wide": True,
+                    "insight": camp_insight
                 })
 
             fin = summary.get("financial_kpis") or {}
@@ -333,6 +370,9 @@ class StandaloneHtmlExporter:
                 cost_items.append(("Biên Đóng Góp CM", round(cm / 1e6, 2), "#72efdd"))
 
             if len(cost_items) >= 2 and not any("cơ cấu" in c["title"].lower() or "chi phí" in c["title"].lower() for c in charts):
+                dominant_cost = max(cost_items, key=lambda ci: ci[1])
+                cost_insight = f"Khoản mục <strong>'{dominant_cost[0]}'</strong> chiếm tỷ trọng chi phối lớn nhất ({dominant_cost[1]} Tr. đ). Cần kiểm soát chặt chẽ tỷ lệ chi phí này để đảm bảo không ăn mòn biên lợi nhuận đóng góp (CM) của doanh nghiệp."
+
                 charts.append({
                     "id": "chart_std_cost",
                     "title": "Cơ Cấu Chi Phí & Lợi Nhuận (Cost Structure & Margin)",
@@ -346,7 +386,8 @@ class StandaloneHtmlExporter:
                         "borderColor": "#ffffff",
                         "borderWidth": 2
                     }],
-                    "is_wide": False
+                    "is_wide": False,
+                    "insight": cost_insight
                 })
 
         # 3. Custom Charts generated by user
@@ -355,6 +396,7 @@ class StandaloneHtmlExporter:
             labels = cc.get("labels") or []
             data_pts = cc.get("data") or []
             if labels and data_pts:
+                cc_insight = cc.get("ai_commentary") or f"Biểu đồ phân tích tương quan giữa chiều '{cc.get('dimension', '')}' và chỉ số '{cc.get('metric', '')}', giúp nhà quản lý nắm bắt nhanh sự phân hóa số liệu thực tế."
                 charts.append({
                     "id": f"chart_custom_{idx}",
                     "title": cc.get("title") or f"Biểu Đồ Tùy Chỉnh {idx+1}",
@@ -365,7 +407,8 @@ class StandaloneHtmlExporter:
                     "datasets": [
                         {"label": cc.get("title", "Chỉ số"), "data": data_pts, "backgroundColor": "#a0c4ff", "borderColor": "#0284c7", "borderWidth": 1.5, "borderRadius": 6}
                     ],
-                    "is_wide": len(labels) > 6
+                    "is_wide": len(labels) > 6,
+                    "insight": cc_insight
                 })
 
         sanitized_charts = []
@@ -405,14 +448,14 @@ class StandaloneHtmlExporter:
         else:
             fin = summary.get("financial_kpis") or {}
             kpis = summary.get("summary_kpis") or {}
-            net_rev = fin.get("total_net_revenue") or kpis.get("total_net_revenue", 0)
-            cm = fin.get("total_contribution_margin") or kpis.get("total_contribution_margin", 0)
-            cm_pct = fin.get("cm_pct", 0)
-            roi_pct = fin.get("roi_pct", 0)
-            total_costs = fin.get("total_campaign_costs", 0)
-            returns = fin.get("total_return_amount", 0)
-            orders_cnt = fin.get("total_orders", 0) or kpis.get("total_orders", 0)
-            roas = fin.get("roas", 0)
+            net_rev = fin.get("total_net_revenue") or kpis.get("total_net_revenue") or fin.get("net_revenue") or kpis.get("net_revenue", 0)
+            cm = fin.get("total_contribution_margin") or kpis.get("total_contribution_margin") or fin.get("contribution_margin") or kpis.get("contribution_margin", 0)
+            cm_pct = fin.get("cm_pct") or kpis.get("cm_pct") or fin.get("margin_pct") or kpis.get("margin_pct", 0)
+            roi_pct = fin.get("roi_pct") or kpis.get("roi_pct") or fin.get("roi", 0)
+            total_costs = fin.get("total_campaign_costs") or kpis.get("total_campaign_costs") or fin.get("total_expenses") or kpis.get("total_expenses", 0)
+            returns = fin.get("total_return_amount") or kpis.get("total_return_amount") or fin.get("return_amount", 0)
+            orders_cnt = fin.get("total_orders") or kpis.get("total_orders") or fin.get("order_count") or kpis.get("order_count", 0)
+            roas = fin.get("roas") or kpis.get("roas", 0)
 
             return f"""
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
@@ -918,18 +961,30 @@ class StandaloneHtmlExporter:
 
         for idx, c in enumerate(charts):
             span_style = "grid-column: span 2;" if c["is_wide"] else ""
+            insight_html = f"""
+            <div style="margin-top: 14px; padding: 10px 14px; background: #f8fafc; border-left: 3px solid #0d9488; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #334155;">
+                <div style="font-weight: 800; color: #183634; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>💡 Phân Tích &amp; Nhận Định Nhanh:</span>
+                </div>
+                <div>{c.get('insight', '')}</div>
+            </div>
+            """ if c.get('insight') else ""
+
             chart_boxes.append(f"""
-            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); {span_style}">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f8fafc; padding-bottom: 8px;">
-                    <div>
-                        <strong style="font-size: 13px; color: #183634; display: block;">{idx+1}. {c['title']}</strong>
-                        <span style="font-size: 11px; color: #64748b;">{c['subtitle']}</span>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); display: flex; flex-direction: column; justify-content: space-between; {span_style}">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f8fafc; padding-bottom: 8px;">
+                        <div>
+                            <strong style="font-size: 13px; color: #183634; display: block;">{idx+1}. {c['title']}</strong>
+                            <span style="font-size: 11px; color: #64748b;">{c['subtitle']}</span>
+                        </div>
+                        {f'<span style="font-size: 10px; font-weight: bold; background: #c5dedd40; color: #183634; padding: 2px 8px; border-radius: 9999px;">{c["unit"]}</span>' if c['unit'] else ''}
                     </div>
-                    {f'<span style="font-size: 10px; font-weight: bold; background: #c5dedd40; color: #183634; padding: 2px 8px; border-radius: 9999px;">{c["unit"]}</span>' if c['unit'] else ''}
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="{c['id']}"></canvas>
+                    </div>
                 </div>
-                <div style="height: 250px; position: relative;">
-                    <canvas id="{c['id']}"></canvas>
-                </div>
+                {insight_html}
             </div>
             """)
 
@@ -1150,9 +1205,18 @@ class StandaloneHtmlExporter:
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {{
+        function initializeReportCharts() {{
+            if (typeof Chart === 'undefined') {{
+                setTimeout(initializeReportCharts, 120);
+                return;
+            }}
             {chr(10).join(chart_js_lines)}
-        }});
+        }}
+        if (document.readyState === 'loading') {{
+            document.addEventListener("DOMContentLoaded", initializeReportCharts);
+        }} else {{
+            initializeReportCharts();
+        }}
     </script>
 </body>
 </html>"""
@@ -1178,18 +1242,30 @@ class StandaloneHtmlExporter:
         overview_boxes = []
         for idx, c in enumerate(charts):
             span_style = "grid-column: span 2;" if c["is_wide"] else ""
+            insight_html = f"""
+            <div style="margin-top: 14px; padding: 10px 14px; background: #f8fafc; border-left: 3px solid #0d9488; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #334155;">
+                <div style="font-weight: 800; color: #183634; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>💡 Phân Tích &amp; Nhận Định Nhanh:</span>
+                </div>
+                <div>{c.get('insight', '')}</div>
+            </div>
+            """ if c.get('insight') else ""
+
             overview_boxes.append(f"""
-            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 18px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); {span_style}">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f8fafc; padding-bottom: 8px;">
-                    <div>
-                        <strong style="font-size: 13px; color: #183634; display: block;">{idx+1}. {c['title']}</strong>
-                        <span style="font-size: 11px; color: #64748b;">{c['subtitle']}</span>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 18px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); display: flex; flex-direction: column; justify-content: space-between; {span_style}">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f8fafc; padding-bottom: 8px;">
+                        <div>
+                            <strong style="font-size: 13px; color: #183634; display: block;">{idx+1}. {c['title']}</strong>
+                            <span style="font-size: 11px; color: #64748b;">{c['subtitle']}</span>
+                        </div>
+                        {f'<span style="font-size: 10px; font-weight: bold; background: #c5dedd40; color: #183634; padding: 2px 8px; border-radius: 9999px;">{c["unit"]}</span>' if c['unit'] else ''}
                     </div>
-                    {f'<span style="font-size: 10px; font-weight: bold; background: #c5dedd40; color: #183634; padding: 2px 8px; border-radius: 9999px;">{c["unit"]}</span>' if c['unit'] else ''}
+                    <div style="height: 250px; position: relative;">
+                        <canvas id="dash_{c['id']}"></canvas>
+                    </div>
                 </div>
-                <div style="height: 250px; position: relative;">
-                    <canvas id="dash_{c['id']}"></canvas>
-                </div>
+                {insight_html}
             </div>
             """)
 
@@ -1233,6 +1309,14 @@ class StandaloneHtmlExporter:
                     <div style="height: 380px; position: relative;">
                         <canvas id="single_{c['id']}"></canvas>
                     </div>
+                    {f'''
+                    <div style="margin-top: 18px; padding: 14px 18px; background: #f8fafc; border-left: 4px solid #0d9488; border-radius: 10px; font-size: 12px; line-height: 1.6; color: #334155;">
+                        <div style="font-weight: 800; color: #183634; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <span>💡 Phân Tích &amp; Nhận Định Chuyên Sâu:</span>
+                        </div>
+                        <div>{c.get("insight", "")}</div>
+                    </div>
+                    ''' if c.get("insight") else ""}
                 </div>
             </div>
             """)
@@ -1409,9 +1493,18 @@ class StandaloneHtmlExporter:
             if (targetPanel) targetPanel.style.display = 'block';
         }}
 
-        document.addEventListener("DOMContentLoaded", function() {{
+        function initializeDashboardCharts() {{
+            if (typeof Chart === 'undefined') {{
+                setTimeout(initializeDashboardCharts, 120);
+                return;
+            }}
             {chr(10).join(chart_js_lines)}
-        }});
+        }}
+        if (document.readyState === 'loading') {{
+            document.addEventListener("DOMContentLoaded", initializeDashboardCharts);
+        }} else {{
+            initializeDashboardCharts();
+        }}
     </script>
 </body>
 </html>"""
