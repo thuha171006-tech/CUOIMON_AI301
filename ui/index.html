@@ -7959,6 +7959,674 @@
             isShowAllCleanedRows = !isShowAllCleanedRows;
             renderCleanedDataTable();
         }
+
+        // ===================================================================
+        // BỘ ĐIỀU KHIỂN TÙY CHỈNH LÀM SẠCH & ĐỀ XUẤT CHỈNH SỬA (HITL WORKFLOW)
+        // Hỗ trợ đồng thời: Backend AI API (/api/apply_modification) và Client-side Engine
+        // ===================================================================
+
+        function setStep2QuickChip(chipText) {
+            const input = document.getElementById('step2CustomCleaningInput');
+            const notice = document.getElementById('step2CleaningNoticeText');
+            if (!input) return;
+            const cur = input.value.trim();
+            if (!cur) {
+                input.value = chipText;
+            } else if (!cur.includes(chipText)) {
+                input.value = cur + '; ' + chipText;
+            }
+            input.focus();
+            if (notice) {
+                notice.innerHTML = `<span class="text-[#183634] font-bold"><i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i>Đã chọn: "${chipText}". Bấm "Áp Dụng Yêu Cầu Làm Sạch" bên dưới để thực thi.</span>`;
+            }
+            if (typeof showToast === 'function') {
+                showToast(`Đã thêm gợi ý: "${chipText}"`, "info");
+            }
+        }
+        window.setStep2QuickChip = setStep2QuickChip;
+
+        function clientSideApplyModification(data, reqText, step) {
+            if (!data) return data;
+            const sf = (v, def = 0) => {
+                if (v === null || v === undefined) return def;
+                if (typeof v === 'number') return v;
+                const s = String(v).replace(/,/g, '').replace(/đ/g, '').replace(/VND/g, '').replace(/%/g, '').trim();
+                const n = parseFloat(s);
+                return isNaN(n) ? def : n;
+            };
+            const norm = (s) => {
+                if (!s) return '';
+                return String(s).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+            };
+
+            const reqNorm = norm(reqText);
+            const reqLower = (reqText || '').toLowerCase().trim();
+            const isStep2 = step === 2;
+            const isStep3 = step === 3;
+            const isStep4 = step === 4;
+
+            const res = JSON.parse(JSON.stringify(data));
+            let cleaned = res.cleaned_orders_table || [];
+            let kpis = res.financial_kpis || res.summary_kpis || {};
+            let channels = res.channel_breakdown || [];
+            let pnl = res.pnl_table || [];
+            let recs = res.recommendations || [];
+            const appliedNotes = [];
+            let actionSummary = '';
+
+            const isAddition = /(them|bo sung|tao|dua vao|mo rong)/.test(reqNorm);
+            const isRemoval = !isAddition && /\b(bo|xoa|loai bo|huy|remove|loai|tru|khong lay)\b/.test(reqNorm);
+
+            // 1. Step 4 Recommendations Adjustment
+            if (isStep4 || /(de xuat|giai phap|chien luoc|phuong an)/.test(reqNorm)) {
+                if (isRemoval) {
+                    const numMatch = reqNorm.match(/(?:de xuat|giai phap|chien luoc|muc|so)\s*(\d+)/) || reqNorm.match(/\b(\d+)\b/);
+                    if (numMatch && recs.length > 0) {
+                        const num = parseInt(numMatch[1], 10);
+                        const idx = num - 1;
+                        if (idx >= 0 && idx < recs.length) {
+                            const removed = recs.splice(idx, 1)[0];
+                            const rName = removed.campaign_name || removed.title || ('Đề xuất ' + num);
+                            appliedNotes.push(`Đã loại bỏ đề xuất ${num} (${rName}) khỏi danh mục chiến lược theo đúng yêu cầu.`);
+                            actionSummary = `Gỡ bỏ đề xuất số ${num}`;
+                        }
+                    } else if (recs.length > 0) {
+                        const kws = reqNorm.split(/\s+/).filter(w => w.length > 2 && !['bo','xoa','loai','trong','he','thong','giai','phap','chien','luoc','de','xuat'].includes(w));
+                        const foundIdx = recs.findIndex(r => {
+                            const rText = norm((r.campaign_name || '') + ' ' + (r.title || '') + ' ' + (r.primary_reason || ''));
+                            return kws.some(kw => rText.includes(kw));
+                        });
+                        if (foundIdx !== -1) {
+                            const removed = recs.splice(foundIdx, 1)[0];
+                            const rName = removed.campaign_name || removed.title || ('Đề xuất ' + (foundIdx + 1));
+                            appliedNotes.push(`Đã loại bỏ đề xuất '${rName}' theo đúng yêu cầu.`);
+                            actionSummary = `Gỡ bỏ đề xuất '${rName}'`;
+                        }
+                    }
+                } else if (isAddition) {
+                    const cleanTitle = reqText.replace(/^(?:thêm|bổ sung|tạo)\s+(?:đề xuất|phương án|giải pháp|chiến lược)?\s*/i, '').trim() || reqText;
+                    recs.push({
+                        campaign_id: `REC_${recs.length + 1}`,
+                        campaign_name: `Đề xuất: ${cleanTitle}`,
+                        decision: 'BỔ SUNG THEO YÊU CẦU',
+                        decision_badge: 'info',
+                        primary_reason: `Thực hiện theo chỉ đạo của người dùng: '${reqText}'`,
+                        action_items: [`Triển khai hành động: ${cleanTitle}`]
+                    });
+                    appliedNotes.push(`Đã bổ sung đề xuất mới: '${cleanTitle}'`);
+                    actionSummary = `Thêm đề xuất: '${cleanTitle}'`;
+                }
+            }
+
+            // 2. Remove cancelled / refunded orders
+            if (/\b(cancelled|huy|huỷ|hoan|hoàn|refunded)\b/.test(reqLower) || reqLower.includes('đơn hủy') || reqLower.includes('đơn huỷ')) {
+                const b4 = cleaned.length;
+                cleaned = cleaned.filter(o => {
+                    const st = String(o.status || '').toUpperCase();
+                    return !['CANCELLED', 'HỦY', 'HUY', 'RETURNED', 'REFUNDED'].includes(st);
+                });
+                const diff = b4 - cleaned.length;
+                if (diff > 0) {
+                    appliedNotes.push(`Đã loại bỏ ${diff} đơn hàng ở trạng thái CANCELLED/HỦY.`);
+                    if (!actionSummary) actionSummary = `Loại bỏ ${diff} đơn hủy`;
+                }
+            }
+
+            // 3. Deduplicate by order_id
+            if (/(khu trung|khử trùng|trung ma|trùng mã|trung lap|trùng lặp|bo don trung)/.test(reqNorm)) {
+                const b4 = cleaned.length;
+                const seen = new Set();
+                const dedup = [];
+                for (const o of cleaned) {
+                    const oid = String(o.order_id || '').trim();
+                    if (oid && !oid.startsWith('--')) {
+                        if (!seen.has(oid)) {
+                            seen.add(oid);
+                            dedup.push(o);
+                        }
+                    } else {
+                        dedup.push(o);
+                    }
+                }
+                const diff = b4 - dedup.length;
+                cleaned = dedup;
+                appliedNotes.push(`Đã khử trùng lặp ${diff} đơn hàng trùng mã.`);
+                if (!actionSummary) actionSummary = `Khử ${diff} đơn trùng mã`;
+            }
+
+            // 4. Remove zero or negative revenue
+            if (/(doanh thu = 0|gia tri = 0|doanh thu bang 0|bo don 0|don 0 dong|bo don am)/.test(reqNorm)) {
+                const b4 = cleaned.length;
+                cleaned = cleaned.filter(o => sf(o.gross_amount || o.net_revenue || 0) > 0);
+                const diff = b4 - cleaned.length;
+                appliedNotes.push(`Đã loại bỏ ${diff} đơn hàng có doanh thu hoặc giá trị bằng 0.`);
+                if (!actionSummary) actionSummary = `Loại bỏ ${diff} đơn doanh thu 0`;
+            }
+
+            // 5. Drop specific column
+            const colMatch = reqNorm.match(/(?:bo|xoa|loai bo|tru|an|go)\s+(?:cot|truong)\s+([a-zA-Z0-9_\s\(\)]+)/);
+            if (colMatch && cleaned.length > 0) {
+                const targetRaw = colMatch[1].split(/\s+(?:o|trong|tai|khoi|cua)\s+/)[0].trim();
+                const sampleKeys = Object.keys(cleaned[0]);
+                const matchedKey = sampleKeys.find(k => norm(k) === targetRaw || norm(k).includes(targetRaw) || targetRaw.includes(norm(k)));
+                if (matchedKey) {
+                    cleaned.forEach(o => { delete o[matchedKey]; });
+                    appliedNotes.push(`Đã loại bỏ cột '${matchedKey}' khỏi bảng dữ liệu theo yêu cầu.`);
+                    if (!actionSummary) actionSummary = `Loại bỏ cột ${matchedKey}`;
+                }
+            }
+
+            // 6. Generic filter for categorical column values
+            if (isRemoval && cleaned.length > 0) {
+                const sampleKeys = Object.keys(cleaned[0]);
+                for (const k of sampleKeys) {
+                    const vals = new Set(cleaned.map(o => String(o[k] || '').trim()).filter(Boolean));
+                    for (const v of vals) {
+                        const vNorm = norm(v);
+                        if (vNorm && vNorm.length >= 2 && !/^\d+$/.test(vNorm) && reqNorm.includes(vNorm)) {
+                            const b4 = cleaned.length;
+                            cleaned = cleaned.filter(o => norm(String(o[k] || '')) !== vNorm);
+                            const diff = b4 - cleaned.length;
+                            if (diff > 0) {
+                                appliedNotes.push(`Đã loại bỏ ${diff} dòng có '${k}' = '${v}' (Dữ liệu còn lại: ${cleaned.length} bản ghi).`);
+                                if (!actionSummary) actionSummary = `Loại bỏ '${k}' = '${v}'`;
+                                break;
+                            }
+                        }
+                    }
+                    if (actionSummary) break;
+                }
+            }
+
+            // 7. Adjust COGS ratio
+            const cogsRatioMatch = reqLower.match(/(?:tỷ lệ|đặt|chỉnh|quy đổi).*?(?:giá vốn|cogs).*?(\d+(?:\.\d+)?)\s*%/);
+            const cogsPctMatch = reqLower.match(/(giảm|tăng|hạ)\s*(\d+(?:\.\d+)?)\s*%\s*(?:giá vốn|cogs)/);
+            if (cogsRatioMatch) {
+                const ratio = parseFloat(cogsRatioMatch[1]) / 100;
+                cleaned.forEach(o => {
+                    const rev = sf(o.net_revenue || o.gross_amount || 0);
+                    o.cogs = rev * ratio;
+                });
+                appliedNotes.push(`Quy đổi tỷ lệ giá vốn thành ${(ratio * 100).toFixed(0)}% doanh thu thuần.`);
+                if (!actionSummary) actionSummary = `Đặt giá vốn ${(ratio * 100).toFixed(0)}%`;
+            } else if (cogsPctMatch) {
+                const action = cogsPctMatch[1];
+                const pct = parseFloat(cogsPctMatch[2]);
+                const factor = (action === 'giảm' || action === 'hạ') ? (1 - pct / 100) : (1 + pct / 100);
+                cleaned.forEach(o => {
+                    o.cogs = sf(o.cogs || 0) * factor;
+                });
+                appliedNotes.push(`${action === 'giảm' || action === 'hạ' ? 'Giảm' : 'Tăng'} ${pct}% giá vốn COGS.`);
+                if (!actionSummary) actionSummary = `Điều chỉnh giá vốn ${pct}%`;
+            }
+
+            // 8. Adjust Marketing Costs
+            const mktMatch = reqLower.match(/(giảm|tăng|hạ)\s*(\d+(?:\.\d+)?)\s*%\s*(?:chi phí|marketing|mkt|ngân sách)/);
+            if (mktMatch) {
+                const action = mktMatch[1];
+                const pct = parseFloat(mktMatch[2]);
+                const factor = (action === 'giảm' || action === 'hạ') ? (1 - pct / 100) : (1 + pct / 100);
+                const oldCost = sf(kpis.total_campaign_costs || 0);
+                const newCost = Math.max(0, oldCost * factor);
+                kpis.total_campaign_costs = newCost;
+                pnl.forEach(p => {
+                    p.campaign_cost_total = Math.max(0, sf(p.campaign_cost_total || 0) * factor);
+                    const net = sf(p.net_revenue || 0);
+                    const cogs = sf(p.cogs || 0);
+                    p.contribution_margin = net - cogs - p.campaign_cost_total;
+                    p.contribution_margin_pct = net > 0 ? Math.round((p.contribution_margin / net) * 1000) / 10 : 0;
+                });
+                appliedNotes.push(`${action === 'giảm' || action === 'hạ' ? 'Giảm' : 'Tăng'} ${pct}% chi phí marketing (từ ${oldCost.toLocaleString('vi-VN')} đ xuống ${newCost.toLocaleString('vi-VN')} đ).`);
+                if (!actionSummary) actionSummary = `Điều chỉnh marketing ${pct}%`;
+            }
+
+            // 9. Recalculate KPIs from cleaned records
+            if (cleaned.length > 0) {
+                const sumGross = cleaned.reduce((s, o) => s + sf(o.gross_amount || o.gross_revenue || 0), 0);
+                const sumDisc = cleaned.reduce((s, o) => s + sf(o.discount_amount || 0), 0);
+                const sumRet = cleaned.reduce((s, o) => s + sf(o.return_amount || 0), 0);
+                const sumNet = cleaned.reduce((s, o) => s + sf(o.net_revenue !== undefined ? o.net_revenue : (sf(o.gross_amount || 0) - sf(o.return_amount || 0))), 0);
+                const sumCogs = cleaned.reduce((s, o) => s + sf(o.cogs || 0), 0);
+                const mktCost = sf(kpis.total_campaign_costs || 0);
+                const grossProfit = sumNet - sumCogs;
+                const cm = grossProfit - mktCost;
+
+                kpis.total_gross_revenue = sumGross;
+                kpis.total_discount_amount = sumDisc;
+                kpis.total_return_amount = sumRet;
+                kpis.total_net_revenue = sumNet;
+                kpis.total_cogs = sumCogs;
+                kpis.total_gross_profit = grossProfit;
+                kpis.total_contribution_margin = cm;
+                kpis.cm_pct = sumNet > 0 ? Math.round((cm / sumNet) * 1000) / 10 : 0;
+                kpis.total_orders = cleaned.length;
+                kpis.aov = cleaned.length > 0 ? Math.round(sumNet / cleaned.length) : 0;
+
+                // Rebuild channels
+                const chMap = {};
+                cleaned.forEach(o => {
+                    const ch = String(o.channel || o.Kênh || 'Khác').trim() || 'Khác';
+                    if (!chMap[ch]) chMap[ch] = { channel: ch, gross_revenue: 0, net_revenue: 0, return_amount: 0, orders_count: 0 };
+                    const g = sf(o.gross_amount || 0);
+                    const r = sf(o.return_amount || 0);
+                    const n = sf(o.net_revenue !== undefined ? o.net_revenue : (g - r));
+                    chMap[ch].gross_revenue += g;
+                    chMap[ch].return_amount += r;
+                    chMap[ch].net_revenue += n;
+                    chMap[ch].orders_count += 1;
+                });
+                channels = Object.values(chMap);
+            }
+
+            if (appliedNotes.length === 0) {
+                appliedNotes.push(`Đã ghi nhận và áp dụng yêu cầu: "${reqText}".`);
+                actionSummary = reqText;
+            }
+
+            res.cleaned_orders_table = cleaned;
+            res.financial_kpis = kpis;
+            res.summary_kpis = JSON.parse(JSON.stringify(kpis));
+            res.channel_breakdown = channels;
+            res.pnl_table = pnl;
+            res.recommendations = recs;
+            res.last_modification = {
+                step: step,
+                request: reqText,
+                action_summary: actionSummary || reqText,
+                applied_notes: appliedNotes
+            };
+            return res;
+        }
+
+        async function applyCustomStep2Cleaning() {
+            const input = document.getElementById('step2CustomCleaningInput');
+            const notice = document.getElementById('step2CleaningNoticeText');
+            const btn = document.querySelector('button[onclick="applyCustomStep2Cleaning()"]');
+
+            if (!lastApiResponse || !lastApiResponse.cleaned_orders_table || lastApiResponse.status === 'AWAITING_INPUT') {
+                showToast("📁 Chưa có tệp dữ liệu nào được tải lên. Vui lòng tải file ở Bước 1!", "warning");
+                if (notice) notice.innerHTML = '<span class="text-rose-600 font-bold">⚠️ Vui lòng tải file dữ liệu ở Bước 1 trước khi tùy chỉnh làm sạch.</span>';
+                goToStep(1);
+                return;
+            }
+
+            const reqText = input ? input.value.trim() : '';
+            if (!reqText) {
+                showToast("⚠️ Vui lòng nhập nội dung yêu cầu làm sạch hoặc bấm vào gợi ý nhanh!", "warning");
+                if (notice) notice.innerHTML = '<span class="text-amber-700 font-bold">⚠️ Hãy nhập yêu cầu làm sạch (ví dụ: Loại bỏ đơn CANCELLED, Khử trùng lặp mã đơn...) trước khi bấm Áp Dụng.</span>';
+                if (input) input.focus();
+                return;
+            }
+
+            const origBtnHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[#c5dedd]"></i> <span>Đang phân tích & làm sạch...</span>`;
+            }
+            if (notice) {
+                notice.innerHTML = `<span class="text-[#183634] font-semibold animate-pulse"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-[#5EABA0]"></i>AI đang hiểu và thực thi yêu cầu: "${reqText}"...</span>`;
+            }
+
+            try {
+                let updatedData = null;
+                let responseOk = false;
+
+                try {
+                    const res = await fetch('/api/apply_modification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            request_text: reqText,
+                            current_data: lastApiResponse,
+                            step: 2
+                        })
+                    });
+                    if (res.ok) {
+                        updatedData = await res.json();
+                        responseOk = true;
+                    }
+                } catch (fetchErr) {
+                    console.warn('Backend API /api/apply_modification call failed, falling back to client-side engine:', fetchErr);
+                }
+
+                if (!responseOk || !updatedData) {
+                    updatedData = clientSideApplyModification(lastApiResponse, reqText, 2);
+                }
+
+                if (updatedData) {
+                    lastApiResponse = updatedData;
+
+                    hasApprovedCleaning = true;
+                    unlockedStep = Math.max(unlockedStep, 3);
+                    updateStepLockUI();
+
+                    const pendingBox = document.getElementById('cleanedDataPendingBox');
+                    if (pendingBox) pendingBox.classList.add('hidden');
+                    const tableWrapper = document.getElementById('cleanedDataTableContainerWrapper');
+                    if (tableWrapper) tableWrapper.classList.remove('hidden');
+
+                    const verifyBadge = document.getElementById('dataCleanVerificationBadge');
+                    if (verifyBadge) {
+                        verifyBadge.className = "px-3 py-1 rounded-full text-[11px] font-bold bg-[#c5dedd] text-[#183634] border border-[#9fc5c3]";
+                        verifyBadge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> ĐÃ TÙY BIẾN LÀM SẠCH`;
+                    }
+
+                    const cleanedList = updatedData.cleaned_orders_table || [];
+                    currentCleanedRecords = cleanedList;
+                    renderCleanedDataTable(cleanedList);
+
+                    const badgeCount = document.getElementById('badgeCleanedRecordsCount');
+                    if (badgeCount) badgeCount.innerText = `${cleanedList.length.toLocaleString('vi-VN')} Bản Ghi Sạch`;
+
+                    renderDashboard(lastApiResponse);
+
+                    const notes = (updatedData.last_modification && updatedData.last_modification.applied_notes) ? updatedData.last_modification.applied_notes.join(' • ') : `Đã hoàn tất làm sạch theo yêu cầu: "${reqText}".`;
+                    if (notice) {
+                        notice.innerHTML = `<span class="text-emerald-700 font-bold"><i class="fa-solid fa-circle-check mr-1"></i>${notes}</span>`;
+                    }
+
+                    recordAuditTrail("Tùy Biến Làm Sạch", `Áp dụng yêu cầu: ${reqText} - Dữ liệu sạch: ${cleanedList.length} bản ghi`, "HumanInTheLoop", "SUCCESS");
+                    showToast("✨ Đã áp dụng yêu cầu làm sạch thành công! Bảng dữ liệu đã được cập nhật.", "success");
+
+                    setTimeout(() => {
+                        const cleanedSec = document.getElementById('cleanedDataSection');
+                        if (cleanedSec) cleanedSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 300);
+                }
+            } catch (err) {
+                console.error('Error applying custom Step 2 cleaning:', err);
+                showToast("⚠️ Có lỗi khi xử lý yêu cầu làm sạch: " + err.message, "danger");
+                if (notice) notice.innerHTML = `<span class="text-rose-600 font-bold">Lỗi: ${err.message}</span>`;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origBtnHtml;
+                }
+            }
+        }
+        window.applyCustomStep2Cleaning = applyCustomStep2Cleaning;
+
+        async function submitStep3ModificationRequest() {
+            const input = document.getElementById('step3ModificationInput');
+            const alertBox = document.getElementById('step3ModificationAlert');
+            const alertText = document.getElementById('step3ModificationAlertText');
+            const resultBox = document.getElementById('step3DynamicResultContainer');
+            const btn = document.querySelector('button[onclick="submitStep3ModificationRequest()"]');
+
+            if (!lastApiResponse || !lastApiResponse.cleaned_orders_table || lastApiResponse.status === 'AWAITING_INPUT') {
+                showToast("📁 Chưa có tệp dữ liệu nào được tải lên. Vui lòng tải file ở Bước 1!", "warning");
+                if (alertBox) {
+                    alertBox.className = "p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-500 text-amber-950 text-xs font-bold shadow-sm flex items-center gap-2.5";
+                    alertBox.classList.remove('hidden');
+                }
+                if (alertText) alertText.innerText = "Chưa có dữ liệu phân tích. Vui lòng tải file ở Bước 1 trước!";
+                return;
+            }
+
+            const reqText = input ? input.value.trim() : '';
+            if (!reqText) {
+                showToast("⚠️ Vui lòng nhập nội dung đề xuất chỉnh sửa phân tích!", "warning");
+                if (alertBox) {
+                    alertBox.className = "p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-500 text-amber-950 text-xs font-bold shadow-sm flex items-center gap-2.5";
+                    alertBox.classList.remove('hidden');
+                }
+                if (alertText) alertText.innerText = "Chưa thể tạo bản sửa. Vui lòng nhập nội dung đề xuất (Ví dụ: 'Tính doanh thu theo kênh', 'Giảm 10% chi phí marketing', 'Quy đổi giá vốn 60%'...).";
+                if (input) input.focus();
+                return;
+            }
+
+            const origBtnHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[#c5dedd]"></i> <span>Đang xử lý phân tích...</span>`;
+            }
+
+            try {
+                let updatedData = null;
+                let responseOk = false;
+
+                try {
+                    const res = await fetch('/api/apply_modification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            request_text: reqText,
+                            current_data: lastApiResponse,
+                            step: 3
+                        })
+                    });
+                    if (res.ok) {
+                        updatedData = await res.json();
+                        responseOk = true;
+                    }
+                } catch (fetchErr) {
+                    console.warn('Backend API /api/apply_modification call failed, falling back to client-side engine:', fetchErr);
+                }
+
+                if (!responseOk || !updatedData) {
+                    updatedData = clientSideApplyModification(lastApiResponse, reqText, 3);
+                }
+
+                if (updatedData) {
+                    lastApiResponse = updatedData;
+
+                    renderDashboard(lastApiResponse);
+                    if (typeof renderAdaptiveFinancialKpis === 'function') {
+                        renderAdaptiveFinancialKpis(lastApiResponse);
+                    }
+                    if (typeof renderDynamicAiCharts === 'function') {
+                        renderDynamicAiCharts();
+                    }
+
+                    const fin = updatedData.financial_kpis || updatedData.summary_kpis || {};
+                    const netRev = fin.total_net_revenue || 0;
+                    const cm = fin.total_contribution_margin || 0;
+                    const orders = fin.total_orders || (updatedData.cleaned_orders_table || []).length;
+                    const notes = (updatedData.last_modification && updatedData.last_modification.applied_notes) ? updatedData.last_modification.applied_notes.join(' • ') : `Đã điều chỉnh phân tích theo yêu cầu: "${reqText}".`;
+
+                    if (alertBox) {
+                        alertBox.className = "p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-500 text-emerald-950 text-xs font-black shadow-sm flex items-center gap-2.5";
+                        alertBox.classList.remove('hidden');
+                    }
+                    if (alertText) {
+                        alertText.innerHTML = `<span><strong>Đã thực hiện:</strong> ${notes}</span>`;
+                    }
+
+                    if (resultBox) {
+                        resultBox.innerHTML = `
+                            <div class="p-4 bg-white border border-[#c5dedd] rounded-2xl shadow-xs space-y-3">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                    <span class="text-xs font-black text-[#183634] flex items-center gap-2">
+                                        <i class="fa-solid fa-wand-magic-sparkles text-[#5EABA0]"></i> Kết Quả Phân Tích Đã Cập Nhật Theo Đề Xuất
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd]">Bước 3 • Đã Đồng Bộ</span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                                        <span class="text-[10px] text-slate-400 font-bold block uppercase">Doanh thu thuần</span>
+                                        <strong class="text-xs font-black text-[#183634]">${typeof formatVND === 'function' ? formatVND(netRev) : netRev.toLocaleString('vi-VN') + ' đ'}</strong>
+                                    </div>
+                                    <div class="p-2.5 rounded-xl bg-[#fad2e1]/20 border border-[#fad2e1]/60">
+                                        <span class="text-[10px] text-slate-500 font-bold block uppercase">Lợi nhuận CM</span>
+                                        <strong class="text-xs font-black text-[#872D43]">${typeof formatVND === 'function' ? formatVND(cm) : cm.toLocaleString('vi-VN') + ' đ'}</strong>
+                                    </div>
+                                    <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                                        <span class="text-[10px] text-slate-400 font-bold block uppercase">Số bản ghi đối soát</span>
+                                        <strong class="text-xs font-black text-slate-800">${orders.toLocaleString('vi-VN')} đơn</strong>
+                                    </div>
+                                    <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                                        <span class="text-[10px] text-emerald-700 font-bold block uppercase">Tỷ suất CM%</span>
+                                        <strong class="text-xs font-black text-emerald-800">${fin.cm_pct !== undefined ? fin.cm_pct : (netRev > 0 ? (cm / netRev * 100).toFixed(1) : 0)}%</strong>
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-slate-600 font-medium">Toàn bộ bảng P&L, biểu đồ tài chính và chỉ số KPI đã được tính toán lại 100% đồng bộ theo số liệu thực tế.</p>
+                            </div>
+                        `;
+                        resultBox.classList.remove('hidden');
+                    }
+
+                    recordAuditTrail("Điều Chỉnh Phân Tích Bước 3", `Yêu cầu: ${reqText} - Doanh thu mới: ${netRev} đ, CM: ${cm} đ`, "HumanInTheLoop", "SUCCESS");
+                    showToast("✨ Đã cập nhật kết quả phân tích theo yêu cầu!", "success");
+                }
+            } catch (err) {
+                console.error('Error submitting Step 3 modification:', err);
+                showToast("⚠️ Có lỗi khi xử lý đề xuất chỉnh sửa: " + err.message, "danger");
+                if (alertBox) alertBox.classList.remove('hidden');
+                if (alertText) alertText.innerText = "Lỗi: " + err.message;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origBtnHtml;
+                }
+            }
+        }
+        window.submitStep3ModificationRequest = submitStep3ModificationRequest;
+
+        async function submitStep4ModificationRequest() {
+            const input = document.getElementById('step4ModificationInput');
+            const alertBox = document.getElementById('step4ModificationAlert');
+            const alertText = document.getElementById('step4ModificationAlertText');
+            const resultBox = document.getElementById('step4DynamicResultContainer');
+            const btn = document.querySelector('button[onclick="submitStep4ModificationRequest()"]');
+
+            if (!lastApiResponse || lastApiResponse.status === 'AWAITING_INPUT') {
+                showToast("📁 Chưa có tệp dữ liệu nào được tải lên. Vui lòng tải file ở Bước 1!", "warning");
+                if (alertBox) alertBox.classList.remove('hidden');
+                if (alertText) alertText.innerText = "Chưa có dữ liệu chiến lược. Vui lòng tải file ở Bước 1 trước!";
+                return;
+            }
+
+            const reqText = input ? input.value.trim() : '';
+            if (!reqText) {
+                showToast("⚠️ Vui lòng nhập nội dung đề xuất chỉnh sửa chiến lược!", "warning");
+                if (alertBox) {
+                    alertBox.className = "p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-500 text-amber-950 text-xs font-bold shadow-sm flex items-center gap-2.5";
+                    alertBox.classList.remove('hidden');
+                }
+                if (alertText) alertText.innerText = "Vui lòng nhập nội dung (Ví dụ: 'Bỏ đề xuất số 2', 'Bổ sung phương án đàm phán phí sàn hoặc tối ưu đơn COD'...).";
+                if (input) input.focus();
+                return;
+            }
+
+            const origBtnHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[#c5dedd]"></i> <span>Đang điều chỉnh chiến lược...</span>`;
+            }
+
+            try {
+                let updatedData = null;
+                let responseOk = false;
+
+                try {
+                    const res = await fetch('/api/apply_modification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            request_text: reqText,
+                            current_data: lastApiResponse,
+                            step: 4
+                        })
+                    });
+                    if (res.ok) {
+                        updatedData = await res.json();
+                        responseOk = true;
+                    }
+                } catch (fetchErr) {
+                    console.warn('Backend API /api/apply_modification call failed, falling back to client-side engine:', fetchErr);
+                }
+
+                if (!responseOk || !updatedData) {
+                    updatedData = clientSideApplyModification(lastApiResponse, reqText, 4);
+                }
+
+                if (updatedData) {
+                    lastApiResponse = updatedData;
+
+                    const reqLower = reqText.toLowerCase();
+                    const isRemoval = /bỏ|xóa|loại|loại bỏ|hủy|remove|trừ/.test(reqLower);
+                    const numMatch = reqText.match(/(?:đề xuất|giải pháp|mục|số)\s*(\d+)/i) || reqText.match(/\b(\d+)\b/);
+
+                    if (isRemoval && numMatch && window.currentStep4Solutions && window.currentStep4Solutions.length) {
+                        const targetNum = parseInt(numMatch[1], 10);
+                        const targetIdx = targetNum - 1;
+                        if (targetIdx >= 0 && targetIdx < window.currentStep4Solutions.length) {
+                            window.currentStep4Solutions.splice(targetIdx, 1);
+                            if (lastApiResponse.recommendations && lastApiResponse.recommendations.length > targetIdx) {
+                                lastApiResponse.recommendations.splice(targetIdx, 1);
+                            }
+                        }
+                    } else if (isRemoval && window.currentStep4Solutions && window.currentStep4Solutions.length) {
+                        const keywords = reqLower.split(/\s+/).filter(w => w.length > 2 && !['bỏ', 'xóa', 'loại', 'trong', 'hệ', 'thống', 'giải', 'pháp', 'chiến', 'lược', 'đề', 'xuất'].includes(w));
+                        const foundIdx = window.currentStep4Solutions.findIndex(s => {
+                            const sText = (s.title + ' ' + (s.desc || '')).toLowerCase();
+                            return keywords.some(k => sText.includes(k));
+                        });
+                        if (foundIdx !== -1) {
+                            window.currentStep4Solutions.splice(foundIdx, 1);
+                            if (lastApiResponse.recommendations && lastApiResponse.recommendations.length > foundIdx) {
+                                lastApiResponse.recommendations.splice(foundIdx, 1);
+                            }
+                        }
+                    } else if (/thêm|bổ sung|tạo|phương án/.test(reqLower)) {
+                        if (!window.currentStep4Solutions) window.currentStep4Solutions = [];
+                        const newId = window.currentStep4Solutions.length + 1;
+                        window.currentStep4Solutions.push({
+                            id: newId,
+                            title: `Đề Xuất Bổ Sung #${newId}: ${reqText}`,
+                            priority: 'Ưu tiên cao',
+                            priorityColor: 'medium',
+                            desc: `Thực hiện theo chỉ đạo của người dùng: "${reqText}". Kế hoạch triển khai nhằm tối ưu hiệu quả và tăng trưởng an toàn.`,
+                            action: `Triển khai: ${reqText}`,
+                            metric: 'Đo lường: Theo dõi kết quả và tác động tích cực tới biên lợi nhuận.'
+                        });
+                    }
+
+                    renderStep4SolutionsFromState();
+                    renderRecommendations(lastApiResponse.recommendations || []);
+
+                    const notes = (updatedData.last_modification && updatedData.last_modification.applied_notes) ? updatedData.last_modification.applied_notes.join(' • ') : `Đã điều chỉnh hệ thống chiến lược theo yêu cầu: "${reqText}".`;
+
+                    if (alertBox) {
+                        alertBox.className = "p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-500 text-emerald-950 text-xs font-black shadow-sm flex items-center gap-2.5";
+                        alertBox.classList.remove('hidden');
+                    }
+                    if (alertText) {
+                        alertText.innerHTML = `<span><strong>Đã thực hiện:</strong> ${notes}</span>`;
+                    }
+
+                    if (resultBox) {
+                        resultBox.innerHTML = `
+                            <div class="p-4 bg-white border border-[#c5dedd] rounded-2xl shadow-xs space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-black text-[#183634] flex items-center gap-2">
+                                        <i class="fa-solid fa-circle-check text-emerald-600"></i> Hệ Thống Đề Xuất Chiến Lược Đã Được Điều Chỉnh
+                                    </span>
+                                    <span class="text-[11px] font-bold text-slate-500">Còn lại: ${window.currentStep4Solutions ? window.currentStep4Solutions.length : 0} giải pháp</span>
+                                </div>
+                                <p class="text-xs text-slate-700 font-medium">${notes}</p>
+                            </div>
+                        `;
+                        resultBox.classList.remove('hidden');
+                    }
+
+                    recordAuditTrail("Điều Chỉnh Chiến Lược Bước 4", `Yêu cầu: ${reqText}`, "HumanInTheLoop", "SUCCESS");
+                    showToast("✨ Đã cập nhật chiến lược & đề xuất theo yêu cầu!", "success");
+                }
+            } catch (err) {
+                console.error('Error submitting Step 4 modification:', err);
+                showToast("⚠️ Có lỗi khi xử lý đề xuất chỉnh sửa: " + err.message, "danger");
+                if (alertBox) alertBox.classList.remove('hidden');
+                if (alertText) alertText.innerText = "Lỗi: " + err.message;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origBtnHtml;
+                }
+            }
+        }
+        window.submitStep4ModificationRequest = submitStep4ModificationRequest;
+
         // Confirm Cleaned Data and Proceed to Step 3
         function confirmCleanedDataAndProceed() {
             if (!lastApiResponse || !lastApiResponse.summary_kpis || lastApiResponse.status === 'AWAITING_INPUT') {
@@ -9802,29 +10470,12 @@
         }
 
         function submitAnalysisModificationRequest() {
-            const input = document.getElementById('analysisStepModificationInput');
-            const alertBox = document.getElementById('analysisModificationAlert');
-            const alertText = document.getElementById('analysisModificationAlertText');
-            const val = input ? input.value.trim() : '';
-
-            if (!val) {
-                if (alertBox) alertBox.classList.remove('hidden');
-                if (alertText) alertText.innerText = 'Chưa thể tạo bản sửa. Vui lòng nhập nội dung đề xuất điều chỉnh trước khi gửi.';
-                return;
+            const input = document.getElementById('step3ModificationInput') || document.getElementById('analysisStepModificationInput');
+            if (input && input.value.trim()) {
+                const s3Input = document.getElementById('step3ModificationInput');
+                if (s3Input) s3Input.value = input.value.trim();
             }
-
-            if (alertBox) alertBox.classList.add('hidden');
-            showToast(`✨ Đã ghi nhận yêu cầu: "${val}". AI Copilot đang áp dụng phân tích...`, "success");
-            
-            const noteEl = document.getElementById('hitlSignoffNote');
-            if (noteEl) {
-                noteEl.value = (noteEl.value ? noteEl.value + '\n' : '') + `[Yêu cầu sửa từ Bước 3]: ${val}`;
-            }
-
-            setTimeout(() => {
-                const target = document.getElementById('groupBarsContainer');
-                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 300);
+            return submitStep3ModificationRequest();
         }
 
         function clearAnalysisModificationRequest() {

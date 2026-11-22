@@ -68,7 +68,8 @@ class DynamicModificationEngine:
             elif target:
                 return cleaned_orders, f"Đã ghi nhận yêu cầu ẩn / loại bỏ cột '{target}' khỏi bảng phân tích.", f"Ẩn cột {target}"
 
-        is_removal = any(w in req_norm for w in ["bo", "loai bo", "xoa", "tru", "khong lay", "loai", "ngung", "huy"])
+        is_addition = any(w in req_norm for w in ["bo sung", "them", "tao", "tao moi", "dua vao", "mo rong"])
+        is_removal = not is_addition and any(re.search(r'\b' + re.escape(w) + r'\b', req_norm) for w in ["bo", "loai bo", "xoa", "tru", "khong lay", "loai", "ngung", "huy"])
         is_keep = any(w in req_norm for w in ["chi lay", "chi giu", "giu lai", "loc lay", "loc"])
 
         if not (is_removal or is_keep):
@@ -216,9 +217,10 @@ class DynamicModificationEngine:
         # 0. ĐIỀU CHỈNH / XÓA / BỔ SUNG ĐỀ XUẤT CHIẾN LƯỢC (BƯỚC 4)
         # ==============================================================
         recs = [dict(r) for r in (data.get("recommendations") or [])]
+        is_addition = any(w in req_norm for w in ["them", "bo sung", "tao", "tao moi", "dua vao", "mo rong", "de xuat them"])
         is_rec_req = (step == 4) or any(w in req_norm for w in ["de xuat", "giai phap", "chien luoc", "phuong an"])
         if is_rec_req:
-            is_rec_removal = any(w in req_norm for w in ["bo", "xoa", "loai bo", "huy", "remove", "loai", "tru"])
+            is_rec_removal = not is_addition and any(re.search(r'\b' + re.escape(w) + r'\b', req_norm) for w in ["bo", "xoa", "loai bo", "huy", "remove", "loai", "tru"])
             if is_rec_removal:
                 num_match = re.search(r'(?:de xuat|giai phap|chien luoc|muc|so)\s*(\d+)', req_norm) or re.search(r'\b(\d+)\b', req_norm)
                 if num_match and recs:
@@ -241,17 +243,20 @@ class DynamicModificationEngine:
                             applied_notes.append(note)
                             action_summary = f"Gỡ bỏ đề xuất '{rec_name}'"
                             break
-            elif any(w in req_norm for w in ["them", "bo sung", "tao"]):
+            elif is_addition:
+                clean_title = re.sub(r'^(?:them|bo sung|tao)\s+(?:de xuat|phuong an|giai phap|chien luoc)?\s*', '', req, flags=re.I).strip()
+                if not clean_title:
+                    clean_title = req
                 recs.append({
                     "campaign_id": f"REC_{len(recs)+1}",
-                    "campaign_name": f"Đề xuất bổ sung: {req}",
+                    "campaign_name": f"Đề xuất: {clean_title}",
                     "decision": "BỔ SUNG THEO YÊU CẦU",
                     "decision_badge": "info",
-                    "primary_reason": f"Thực hiện theo chỉ đạo người dùng: '{req}'",
-                    "action_items": [f"Triển khai hành động: {req}"]
+                    "primary_reason": f"Thực hiện theo chỉ đạo của người dùng: '{req}'",
+                    "action_items": [f"Triển khai hành động: {clean_title}"]
                 })
-                applied_notes.append(f"Đã bổ sung đề xuất mới: '{req}'")
-                action_summary = "Thêm đề xuất mới"
+                applied_notes.append(f"Đã bổ sung đề xuất mới: '{clean_title}'")
+                action_summary = f"Thêm đề xuất: '{clean_title[:30]}...'" if len(clean_title) > 30 else f"Thêm đề xuất: '{clean_title}'"
 
         # ==============================================================
         # 1. THÔNG MINH: LỌC DỮ LIỆU ĐỘNG THEO BẤT KỲ CỘT & GIÁ TRỊ NÀO (GENERIC SMART FILTER)
@@ -330,15 +335,16 @@ class DynamicModificationEngine:
         # ==============================================================
         # 4. KHỬ TRÙNG LẶP MÃ ĐƠN (DEDUPLICATION)
         # ==============================================================
-        if any(k in req_lower for k in ["khử trùng", "khu trung", "trùng mã", "trung ma", "trùng lặp", "bỏ đơn trùng"]):
+        if any(k in req_lower for k in ["khử trùng", "khu trung", "trùng mã", "trung ma", "trùng lặp", "bỏ đơn trùng", "khử trùng lặp"]):
             before_cnt = len(cleaned_orders)
             seen_ids = set()
             dedup_orders = []
             for o in cleaned_orders:
-                oid = str(o.get("order_id", ""))
-                if oid and not oid.startswith("--") and oid not in seen_ids:
-                    seen_ids.add(oid)
-                    dedup_orders.append(o)
+                oid = str(o.get("order_id", "")).strip()
+                if oid and not oid.startswith("--"):
+                    if oid not in seen_ids:
+                        seen_ids.add(oid)
+                        dedup_orders.append(o)
                 else:
                     dedup_orders.append(o)
             diff = before_cnt - len(dedup_orders)
