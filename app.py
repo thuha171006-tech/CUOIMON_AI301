@@ -337,8 +337,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
 
                 summary = payload.get("summary") or agent_instance.get_summary()
+                history = payload.get("history") or []
                 print(f"[COPILOT] Nhận câu hỏi: '{query}'", flush=True)
-                answer = agent_instance.gemini_service.chat_with_copilot(query, summary)
+                answer = agent_instance.gemini_service.chat_with_copilot(query, summary, history=history)
                 print(f"[COPILOT] Phản hồi thành công ({len(answer)} ký tự)", flush=True)
                 self._set_headers(200)
                 self.wfile.write(safe_json_dumps({"answer": answer}).encode("utf-8"))

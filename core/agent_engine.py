@@ -268,110 +268,26 @@ class SalesEvaluationAgent:
     ) -> List[Dict[str, Any]]:
         """
         Generates in-depth Problem - Root Cause - Actionable Solutions Matrix
-        from empirical financial and operational data.
+        from empirical financial and operational data specifically tailored to the dataset.
         """
-        if not financial_kpis or financial_kpis.get("total_net_revenue", 0) <= 0:
-            return []
-        matrix = []
-
-        # Problem 1: Loss-making or Thin-Margin Campaigns
-        loss_camps = [p for p in pnl_records if p.get("contribution_margin", 0) < 0 and p.get("campaign_id") != "ORGANIC"]
-        low_margin_camps = [p for p in pnl_records if 0 <= p.get("contribution_margin", 0) and p.get("contribution_margin_pct", 0) < 15 and p.get("campaign_id") != "ORGANIC"]
-
-        if loss_camps:
-            names = ", ".join([f"{c.get('campaign_name')} (Âm {abs(c.get('contribution_margin', 0)):,.0f} đ)" for c in loss_camps])
-            matrix.append({
-                "id": "PROB_01",
-                "title": "Thâm Hụt Lợi Nhuận Ở Các Chiến Dịch Thua Lỗ (CM < 0)",
-                "severity": "CRITICAL",
-                "badge_color": "rose",
-                "icon": "fa-triangle-exclamation text-rose-500",
-                "problem": f"Phát hiện {len(loss_camps)} chiến dịch đang trực tiếp ăn mòn lợi nhuận công ty: {names}.",
-                "evidence": f"Chiến dịch bị âm lợi nhuận đóng góp do tổng chi phí (chiết khấu voucher + chi phí trực tiếp + chi phí chung) vượt quá biên lợi nhuận gộp.",
-                "root_cause": "Áp dụng chính sách voucher giảm giá quá sâu mà không ràng buộc giá trị đơn tối thiểu (AOV), kết hợp cùng chi phí quảng cáo và hàng hoàn sau kỳ.",
-                "urgent_solution": "Tạm dừng ngay ngân sách quảng cáo và vô hiệu hóa mã voucher cho các chiến dịch âm trong vòng 24h.",
-                "medium_solution": "Thiết lập trần chiết khấu tối đa 12% - 15% doanh thu và chỉ áp dụng cho đơn hàng có giá trị trên 500.000 đ.",
-                "strategic_solution": "Tái cấu trúc danh mục khuyến mãi, chuyển toàn bộ nguồn lực sang các chiến dịch có CM vững chắc như CT2_LOYAL.",
-                "expected_impact": "Cắt giảm ngay 100% khoản thâm hụt tài chính, giúp tỷ suất lợi nhuận đóng góp toàn công ty tăng thêm +8% đến +15%."
-            })
-        elif low_margin_camps:
-            c = low_margin_camps[0]
-            matrix.append({
-                "id": "PROB_01",
-                "title": f"Biên Lợi Nhuận Đóng Góp Mỏng Tại {c.get('campaign_name')} (< 15%)",
-                "severity": "WARNING",
-                "badge_color": "amber",
-                "icon": "fa-circle-exclamation text-amber-500",
-                "problem": f"Chiến dịch {c.get('campaign_name')} đạt doanh số {c.get('net_revenue', 0):,.0f} đ nhưng biên đóng góp chỉ đạt {c.get('contribution_margin_pct', 0):.1f}%.",
-                "evidence": f"Doanh thu cao nhưng chiết khấu ({c.get('discount_cost', 0):,.0f} đ) và chi phí quảng cáo ({c.get('direct_cost', 0):,.0f} đ) đã bào mòn phần lớn thặng dư.",
-                "root_cause": "Chi phí thu hút khách hàng (CAC) quá cao và mức giảm giá chưa tối ưu theo độ co giãn của cầu.",
-                "urgent_solution": "Giảm bớt 20% mức chiết khấu voucher và kiểm soát chặt các kênh quảng cáo có CAC cao.",
-                "medium_solution": "Thiết lập ngưỡng giá trị đơn hàng tối thiểu (AOV Threshold) trước khi được kích hoạt giảm giá.",
-                "strategic_solution": "Thử nghiệm chính sách tích điểm loyalty thay vì giảm giá trực tiếp bằng tiền mặt.",
-                "expected_impact": "Nâng biên lợi nhuận đóng góp từ mức hiện tại lên trên 18%."
-            })
-
-        # Problem 2: Channel Performance & Online Return Rate
-        online_ch = next((c for c in channel_breakdown if 'online' in str(c.get('channel', '')).lower()), None)
-        offline_ch = next((c for c in channel_breakdown if 'offline' in str(c.get('channel', '')).lower()), None)
-
-        if online_ch and online_ch.get("return_rate_pct", 0) > 10:
-            ret_val = online_ch.get("return_amount", 0)
-            ret_pct = online_ch.get("return_rate_pct", 0)
-            matrix.append({
-                "id": "PROB_02",
-                "title": "Tỷ Lệ Đổi Trả Kênh Online Quá Cao Làm Hao Hụt Dòng Tiền",
-                "severity": "WARNING",
-                "badge_color": "amber",
-                "icon": "fa-arrow-rotate-left text-amber-500",
-                "problem": f"Kênh Online ghi nhận tỷ lệ hoàn hàng lên tới {ret_pct:.1f}% (tương đương {ret_val:,.0f} đ giá trị hàng trả), cao vượt trội so với kênh Offline.",
-                "evidence": f"Tổng giá trị hàng hoàn kênh Online là {ret_val:,.0f} đ, làm giảm trực tiếp doanh thu thuần và phát sinh thêm chi phí vận chuyển 2 chiều.",
-                "root_cause": "Khách hàng nhận hàng không đúng kỳ vọng hình ảnh, tư vấn kích thước/chức năng chưa chuẩn xác, hoặc thời gian giao hàng kéo dài.",
-                "urgent_solution": "Thắt chặt quy trình kiểm soát chất lượng đóng gói trước khi giao và chủ động gọi xác nhận đơn trước khi điều phối ship.",
-                "medium_solution": "Nâng cấp hình ảnh, video mô tả sản phẩm 360 độ và bảng thông số kỹ thuật chi tiết trên gian hàng số.",
-                "strategic_solution": "Hợp tác chặt chẽ với đơn vị vận chuyển cam kết thời gian giao trong 24-48h để giảm tỷ lệ từ chối nhận hàng.",
-                "expected_impact": f"Kéo giảm tỷ lệ hoàn hàng kênh Online xuống dưới 7%, thu hồi thêm {ret_val * 0.5:,.0f} đ dòng tiền doanh thu thuần."
-            })
-
-        # Problem 3: Product Margin & COGS Inefficiency
-        if product_breakdown:
-            low_margin_prods = [p for p in product_breakdown if p.get("gross_margin_pct", 0) < 40]
-            high_margin_prods = [p for p in product_breakdown if p.get("gross_margin_pct", 0) >= 50]
-            if low_margin_prods and high_margin_prods:
-                p_low = low_margin_prods[0]
-                p_high = high_margin_prods[0]
-                matrix.append({
-                    "id": "PROB_03",
-                    "title": "Cơ Cấu Sản Phẩm Chưa Tối Ưu - Phụ Thuộc Vào Nhóm Sản Phẩm Biên Lãi Mỏng",
-                    "severity": "OPPORTUNITY",
-                    "badge_color": "indigo",
-                    "icon": "fa-boxes-stacked text-indigo-500",
-                    "problem": f"Sản phẩm chủ lực {p_low.get('product_id')} có biên lợi nhuận gộp chỉ {p_low.get('gross_margin_pct'):.1f}%, trong khi {p_high.get('product_id')} đạt biên lãi tới {p_high.get('gross_margin_pct'):.1f}%.",
-                    "evidence": f"{p_low.get('product_id')} chiếm tỷ trọng doanh số {p_low.get('revenue_share_pct'):.1f}% nhưng giá vốn cao ({p_low.get('cogs'):,.0f} đ), kéo giảm biên lợi nhuận gộp toàn bộ giỏ hàng.",
-                    "root_cause": "Các chương trình khuyến mãi tập trung giảm giá sâu cho sản phẩm phễu mà chưa có chiến lược bán kèm (Cross-sell) sản phẩm biên lãi cao.",
-                    "urgent_solution": f"Tạo ngay gói combo bán kèm {p_low.get('product_id')} với {p_high.get('product_id')} để kích thích khách hàng mua sản phẩm biên cao.",
-                    "medium_solution": "Đàm phán lại biểu phí nhập hàng với nhà cung ứng cho các sản phẩm có sản lượng tiêu thụ lớn.",
-                    "strategic_solution": "Định vị lại danh mục sản phẩm theo ma trận BCG: dùng SKU phễu hút traffic, tối đa hóa lợi nhuận bằng SKU biên cao.",
-                    "expected_impact": "Tăng biên lợi nhuận gộp tổng hợp thêm +3.5% - 5.0% trên mỗi đơn hàng hoàn tất."
-                })
-
-        # Problem 4: Attribution vs Causal Uplift (Strategic)
-        matrix.append({
-            "id": "PROB_04",
-            "title": "Rủi Ro 'Doanh Số Ảo' Do Bẫy Ghi Nhận Kế Toán (Rule-based Attribution vs Causal Uplift)",
-            "severity": "STRATEGIC",
-            "badge_color": "purple",
-            "icon": "fa-brain text-purple-600",
-            "problem": "Doanh thu ghi nhận cho các chiến dịch voucher có thể là doanh thu tự nhiên của khách quen (Cannibalization) chứ không phải tăng trưởng thực chất.",
-            "evidence": "Khách hàng thân thiết vốn dĩ có ý định mua hàng nhưng được tặng voucher giảm giá, khiến doanh nghiệp mất biên lợi nhuận mà không tạo thêm nhu cầu mới.",
-            "root_cause": "Thiếu nhóm đối chứng (Control Group) để kiểm định xem nếu không có mã giảm giá thì khách hàng có tiếp tục mua hay không.",
-            "urgent_solution": "Không tặng mã voucher đại trà cho 100% tệp khách hàng quen; chỉ kích hoạt voucher khi khách hàng có dấu hiệu rời bỏ (Churn Risk).",
-            "medium_solution": "Triển khai thử nghiệm A/B Testing có nhóm đối chứng: 50% nhận voucher, 50% giữ nguyên giá để đo lường Causal Uplift chuẩn xác.",
-            "strategic_solution": "Áp dụng mô hình Uplift Modeling phân khúc khách hàng: Persuadables (chỉ mua khi có khuyến mãi) vs Sure Things (luôn mua).",
-            "expected_impact": "Bảo vệ nguyên vẹn 15% - 25% ngân sách marketing không bị lãng phí cho các đơn hàng vốn dĩ sẽ phát sinh tự nhiên."
-        })
-
-        return matrix
+        raw_tx_df = self.raw_data.get("transactions") if isinstance(self.raw_data, dict) else None
+        active_df = raw_tx_df if (isinstance(raw_tx_df, pd.DataFrame) and not raw_tx_df.empty) else (self.cleaned_data.get("transactions", pd.DataFrame()) if isinstance(self.cleaned_data, dict) else pd.DataFrame())
+        matrix_cols = self.raw_data.get("original_columns") or (list(active_df.columns) if isinstance(active_df, pd.DataFrame) else [])
+        
+        return DomainAnalyzer.build_domain_problem_solution_matrix(
+            df=active_df,
+            domain=getattr(self, "domain_type", "RETAIL_ORDERS"),
+            original_cols=matrix_cols,
+            pnl_records=pnl_records,
+            financial_kpis=financial_kpis,
+            user_question=self.business_context.get("questions", "") or self.business_context.get("focus_question", ""),
+            file_name=self.business_context.get("file_name", ""),
+            channel_breakdown=channel_breakdown,
+            product_breakdown=product_breakdown,
+            timeline_breakdown=getattr(self, "timeline_breakdown", []),
+            exceptions_list=self.exceptions_list,
+            business_context=self.business_context
+        )
 
     def get_summary(self) -> Dict[str, Any]:
         """Convert current state and results into a structured JSON-serializable dictionary."""
@@ -715,7 +631,12 @@ class SalesEvaluationAgent:
             pnl_records=getattr(self, "domain_pnl_records", pnl_records),
             financial_kpis=financial_kpis,
             user_question=self.business_context.get("questions", "") or self.business_context.get("focus_question", ""),
-            file_name=self.business_context.get("file_name", "")
+            file_name=self.business_context.get("file_name", ""),
+            channel_breakdown=channel_breakdown,
+            product_breakdown=product_breakdown,
+            timeline_breakdown=timeline_breakdown,
+            exceptions_list=self.exceptions_list,
+            business_context=self.business_context
         )
         if not problem_solution_matrix:
             problem_solution_matrix = self._generate_problem_solution_matrix(

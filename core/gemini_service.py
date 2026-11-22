@@ -371,43 +371,62 @@ class GeminiService:
             f"Bạn có thể đặt bất kỳ câu hỏi nào về: chi tiết từng giai đoạn, so sánh hiệu quả các kênh, nguyên nhân các dòng ngoại lệ, hoặc chiến lược tối ưu lợi nhuận!"
         )
 
-    def chat_with_copilot(self, query: str, context_summary: Dict[str, Any]) -> str:
-        """Interactive Copilot chat answering natural language questions based on live data."""
-        ctx = context_summary.get("business_context", {})
-        proj = ctx.get("project_name", "Dự Án Kinh Doanh")
-        btype = ctx.get("business_type", "Phân Tích Dữ Liệu")
-        domain = context_summary.get("domain_type", "RETAIL_ORDERS")
-        domain_kpis = context_summary.get("domain_kpis", [])
-        pnl = context_summary.get("pnl_table", [])
-        exceptions = context_summary.get("exceptions_list", [])
+    def chat_with_copilot(self, query: str, context_summary: Dict[str, Any], history: Optional[List[Dict[str, str]]] = None) -> str:
+        """
+        Cố vấn AI trả lời ĐÚNG TRỌNG TÂM câu hỏi:
+          1) Phân tích ý định câu hỏi (chiều, chỉ số, loại câu hỏi, đối tượng cụ thể)
+          2) Truy xuất đúng số liệu liên quan từ kết quả pipeline
+          3) Trả lời trực tiếp -> số liệu minh chứng -> gợi ý ngắn
+        """
+        from core.copilot_engine import CopilotReasoner
+        summary = context_summary or {}
+        reasoner = CopilotReasoner(summary)
+        intent = reasoner.analyze_intent(query)
+        intent_desc = reasoner.describe_intent(intent)
 
-        # Build rich empirical context for LLM prompt
-        kpis_str = ", ".join([f"{k.get('title')}: {k.get('value')}" for k in domain_kpis]) if domain_kpis else "N/A"
+        history_txt = ""
+        for h in (history or [])[-6:]:
+            role = "Người dùng" if h.get("role") == "user" else "Cố vấn"
+            history_txt += f"{role}: {str(h.get('content', ''))[:400]}\n"
 
         system_prompt = (
-            f"Bạn là Trợ lý AI Cố vấn Kinh doanh & Phân tích Dữ liệu cao cấp của Thu Hà (Data Analyst & BI Studio). "
-            f"Bạn đang trực tiếp hỗ trợ phân tích dữ liệu cho dự án: '{proj}' (Miền dữ liệu: {domain}, Loại hình: {btype}). "
-            f"Các chỉ số KPI thực tế của tệp hiện tại: {kpis_str}. "
-            "Hãy trả lời câu hỏi của người dùng một cách chính xác, sắc bén, có số liệu minh chứng từ bảng kết quả thực tế. "
-            "Tuyệt đối KHÔNG bịa đặt số liệu và KHÔNG sử dụng các số liệu giả lập."
+            "Bạn là Cố vấn AI phân tích dữ liệu kinh doanh, trả lời bằng tiếng Việt.\n"
+            "QUY TẮC BẮT BUỘC:\n"
+            "1. Đọc kỹ câu hỏi, xác định chính xác người dùng muốn biết điều gì (chiều phân tích, chỉ số, đối tượng, loại câu hỏi). "
+            "Chỉ trả lời ĐÚNG câu hỏi đó, KHÔNG lan man sang chủ đề khác, KHÔNG dán báo cáo tổng quan khi người ta hỏi một ý cụ thể.\n"
+            "2. Dòng đầu tiên: '🎯 **Bạn hỏi:** <diễn đạt lại ngắn gọn câu hỏi>'.\n"
+            "3. Ngay sau đó: '✅ **Trả lời:** <câu trả lời trực tiếp, có con số cụ thể>'.\n"
+            "4. Sau đó tối đa 3-6 gạch đầu dòng '📊 Số liệu minh chứng' lấy ĐÚNG từ DỮ LIỆU được cung cấp. "
+            "Nếu cần, kết thúc bằng 1-3 gợi ý hành động '💡' ngắn gọn, liên quan trực tiếp tới câu hỏi.\n"
+            "5. TUYỆT ĐỐI không bịa số. Nếu dữ liệu không có thông tin để trả lời, nói rõ 'Tệp hiện không có dữ liệu về ...' "
+            "và gợi ý cột dữ liệu cần bổ sung.\n"
+            "6. Định dạng tiền tệ dễ đọc (VD: 407,1 triệu đ). Câu hỏi nối tiếp (VD: 'còn kênh kia thì sao?') phải hiểu theo lịch sử hội thoại.\n"
+            "7. Ngắn gọn, tối đa khoảng 200 từ trừ khi người dùng yêu cầu chi tiết."
         )
-
         prompt = (
-            f"NGỮ CẢNH DỮ LIỆU THỰC TẾ CỦA TỆP:\n"
-            f"- Miền phân tích (Domain): {domain}\n"
-            f"- KPI Cốt lõi: {kpis_str}\n"
-            f"- Dữ liệu chi tiết: {json.dumps(pnl[:8], ensure_ascii=False, default=str)}\n"
-            f"- Số ngoại lệ làm sạch: {len(exceptions)} trường hợp\n\n"
-            f"CÂU HỎI CỦA NGƯỜI DÙNG: {query}\n\n"
-            f"Hãy trả lời câu hỏi trên bằng tiếng Việt với định dạng Markdown chuyên nghiệp."
+            f"PHÂN TÍCH Ý ĐỊNH SƠ BỘ (tham khảo): {intent_desc}\n\n"
+            f"DỮ LIỆU THỰC TẾ CỦA TỆP (JSON):\n{reasoner.compact_context(intent)}\n\n"
+            + (f"LỊCH SỬ HỘI THOẠI GẦN ĐÂY:\n{history_txt}\n" if history_txt else "")
+            + f"CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG: {query}"
         )
 
         try:
-            result = self.call_gemini(prompt, system_instruction=system_prompt, timeout=8)
-            if result and result.strip() and len(result.strip()) > 20:
-                return result
-        except Exception as e:
+            result = self.call_gemini(prompt, system_instruction=system_prompt, timeout=12)
+            if result and len(result.strip()) > 20:
+                return result.strip()
+        except Exception:
             pass
 
-        # Fallback to Master Local Analytical Reasoning Engine
-        return self.generate_local_fallback_answer(query, context_summary)
+        # ---- Không có / lỗi Gemini API -> Bộ suy luận cục bộ theo đúng ý định ----
+        domain = summary.get("domain_type") or "RETAIL_ORDERS"
+        generic_q = not intent.get("dimension") and not intent.get("metric") and not intent.get("entities")
+        if domain not in ("RETAIL_ORDERS", "GENERIC", "GENERIC_TABLE") and generic_q and \
+                set(intent["qtypes"]) <= {"overview", "list", "total", "top", "bottom"}:
+            try:
+                return self.generate_local_fallback_answer(query, summary)
+            except Exception:
+                pass
+        try:
+            return reasoner.answer_locally(query, intent)
+        except Exception:
+            return self.generate_local_fallback_answer(query, summary)

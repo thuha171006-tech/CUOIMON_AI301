@@ -1048,7 +1048,12 @@ class DomainAnalyzer:
         pnl_records: List[Dict[str, Any]] = None,
         financial_kpis: Dict[str, Any] = None,
         user_question: str = "",
-        file_name: str = ""
+        file_name: str = "",
+        channel_breakdown: List[Dict[str, Any]] = None,
+        product_breakdown: List[Dict[str, Any]] = None,
+        timeline_breakdown: List[Dict[str, Any]] = None,
+        exceptions_list: List[Dict[str, Any]] = None,
+        business_context: Dict[str, Any] = None
     ) -> List[Dict[str, Any]]:
         """
         Dynamically diagnoses the root causes (Chẩn Đoán Nguyên Nhân Gốc Rễ)
@@ -1436,16 +1441,17 @@ class DomainAnalyzer:
                 "expected_impact": "Duy trì tỷ lệ gắn kết dài hạn trên 22% sau 6 tháng, giảm bớt áp lực phải liên tục đổ tiền tìm kiếm khách mới."
             })
 
-        # 6. RETAIL_ORDERS (or General E-Commerce with real campaigns / channels / products)
+        # 6. RETAIL_ORDERS / E-COMMERCE / GENERAL FINANCIAL DATASETS
         else:
-            loss_camps = [p for p in pnl_records if p.get("contribution_margin", 0) < 0 and p.get("campaign_id") != "ORGANIC"]
-            low_margin_camps = [p for p in pnl_records if 0 <= p.get("contribution_margin", 0) and p.get("contribution_margin_pct", 0) < 15 and p.get("campaign_id") != "ORGANIC"]
-            high_ret_pnl = [p for p in pnl_records if p.get("return_rate_pct", 0) > 10 or p.get("return_amount", 0) > 1e6]
+            # Step A: Check for marketing campaigns (ONLY if campaigns actually exist in pnl_records)
+            real_camps = [p for p in pnl_records if str(p.get("campaign_id", "")).upper() not in ["ORGANIC", "DEFAULT", "ALL", ""] and p.get("net_revenue", 0) > 0]
+            loss_camps = [c for c in real_camps if c.get("contribution_margin", 0) < 0]
+            low_cm_camps = [c for c in real_camps if 0 <= c.get("contribution_margin", 0) and c.get("contribution_margin_pct", 0) < 15]
 
             if loss_camps:
                 names = ", ".join([f"{c.get('campaign_name', c.get('campaign_id'))} (Lỗ {abs(c.get('contribution_margin', 0)):,.0f} đ)" for c in loss_camps[:3]])
                 matrix.append({
-                    "id": "PROB_01",
+                    "id": f"RC_{len(matrix)+1:02d}",
                     "title": f"Thâm Hụt Lợi Nhuận Ở Các Chiến Dịch Thua Lỗ (CM < 0)",
                     "severity": "CRITICAL",
                     "badge_color": "rose",
@@ -1458,25 +1464,201 @@ class DomainAnalyzer:
                     "strategic_solution": "Tái cấu trúc danh mục khuyến mãi, chuyển toàn bộ nguồn lực sang các chiến dịch có CM vững chắc.",
                     "expected_impact": "Cắt giảm ngay 100% khoản thâm hụt tài chính, giúp tỷ suất lợi nhuận đóng góp toàn công ty tăng thêm +8% đến +15%."
                 })
-
-            if high_ret_pnl:
-                ret_c = high_ret_pnl[0]
+            elif low_cm_camps:
+                c = low_cm_camps[0]
                 matrix.append({
-                    "id": f"PROB_0{len(matrix)+1}",
-                    "title": f"Tỷ Lệ Đổi Trả / Hoàn Hàng Cao Tại {ret_c.get('campaign_name', ret_c.get('campaign_id'))}",
+                    "id": f"RC_{len(matrix)+1:02d}",
+                    "title": f"Biên Lợi Nhuận Đóng Góp Mỏng Tại Chiến Dịch {c.get('campaign_name', c.get('campaign_id'))} (< 15%)",
                     "severity": "WARNING",
                     "badge_color": "amber",
-                    "icon": "fa-arrow-rotate-left text-amber-500",
-                    "problem": f"Tỷ lệ hoàn hàng đạt {ret_c.get('return_rate_pct', 0):.1f}% (tương đương {ret_c.get('return_amount', 0):,.0f} đ giá trị hàng hoàn).",
-                    "evidence": "Tỷ lệ bom hàng và phát sinh chi phí vận chuyển 2 chiều làm xói mòn lợi nhuận thực tế.",
-                    "root_cause": "Khách hàng nhận hàng không đúng kỳ vọng hình ảnh, tư vấn kích thước/chức năng chưa chuẩn xác, hoặc thời gian giao hàng kéo dài.",
-                    "urgent_solution": "Thắt chặt quy trình kiểm soát chất lượng đóng gói và gọi điện xác nhận đơn trước khi giao.",
-                    "medium_solution": "Cập nhật hình ảnh, video mô tả thực tế và bảng thông số kỹ thuật chi tiết trên gian hàng.",
-                    "strategic_solution": "Hợp tác chặt chẽ với đơn vị vận chuyển cam kết thời gian giao trong 24-48h.",
-                    "expected_impact": "Kéo giảm tỷ lệ hoàn hàng xuống dưới 7%, thu hồi thêm dòng tiền doanh thu thuần."
+                    "icon": "fa-circle-exclamation text-amber-500",
+                    "problem": f"Chiến dịch {c.get('campaign_name', c.get('campaign_id'))} đạt doanh số {c.get('net_revenue', 0):,.0f} đ nhưng biên đóng góp chỉ đạt {c.get('contribution_margin_pct', 0):.1f}%.",
+                    "evidence": f"Doanh thu cao nhưng chiết khấu và chi phí quảng cáo đã bào mòn phần lớn thặng dư.",
+                    "root_cause": "Chi phí thu hút khách hàng (CAC) quá cao và mức giảm giá chưa tối ưu theo độ co giãn của cầu.",
+                    "urgent_solution": "Giảm bớt 20% mức chiết khấu voucher và kiểm soát chặt các kênh quảng cáo có CAC cao.",
+                    "medium_solution": "Thiết lập ngưỡng giá trị đơn hàng tối thiểu (AOV Threshold) trước khi được kích hoạt giảm giá.",
+                    "strategic_solution": "Thử nghiệm chính sách tích điểm loyalty thay vì giảm giá trực tiếp bằng tiền mặt.",
+                    "expected_impact": "Nâng biên lợi nhuận đóng góp từ mức hiện tại lên trên 18%."
                 })
 
-            # GENERAL FALLBACK FOR ARBITRARY FILES (e.g. Car Sales, Land Price, etc.)
+            # Step B: Product Breakdown Analysis (Margin Asymmetry / Heavy dependence on thin-margin products)
+            prods = list(product_breakdown) if product_breakdown else []
+            if not prods:
+                prod_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["sản phẩm", "san pham", "product", "sku", "mặt hàng", "item"])), None)
+                rev_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["doanh thu", "revenue", "gross_revenue", "tiền thu"])), None)
+                cogs_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["giá vốn", "cogs", "chi phí giá vốn"])), None)
+                gp_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["lợi nhuận gộp", "gross_profit", "lợi nhuận"])), None)
+                if prod_col and rev_col:
+                    for p, grp in df.groupby(prod_col):
+                        r = float(pd.to_numeric(grp[rev_col].astype(str).str.replace(r'[%,đVND\s]', '', regex=True).str.replace(',', '.'), errors='coerce').sum())
+                        cg = float(pd.to_numeric(grp[cogs_col].astype(str).str.replace(r'[%,đVND\s]', '', regex=True).str.replace(',', '.'), errors='coerce').sum()) if cogs_col else 0.0
+                        gp = float(pd.to_numeric(grp[gp_col].astype(str).str.replace(r'[%,đVND\s]', '', regex=True).str.replace(',', '.'), errors='coerce').sum()) if gp_col else (r - cg if cg else 0.0)
+                        prods.append({
+                            "label": str(p).strip(),
+                            "product_name": str(p).strip(),
+                            "gross_revenue": r,
+                            "net_revenue": r,
+                            "cogs": cg,
+                            "gross_profit": gp,
+                            "gross_margin_pct": round(gp / r * 100, 1) if r > 0 else 0.0
+                        })
+
+            if len(prods) >= 2:
+                tot_p_rev = sum(p.get("gross_revenue", p.get("net_revenue", 0)) for p in prods) or 1.0
+                prods_by_rev = sorted(prods, key=lambda x: x.get("gross_revenue", x.get("net_revenue", 0)), reverse=True)
+                prods_by_margin = sorted(prods, key=lambda x: x.get("gross_margin_pct", 0))
+
+                top_p_rev = prods_by_rev[0]
+                lowest_m_p = prods_by_margin[0]
+                highest_m_p = prods_by_margin[-1]
+
+                top_p_share = (top_p_rev.get("gross_revenue", top_p_rev.get("net_revenue", 0)) / tot_p_rev * 100)
+                highest_m_share = (highest_m_p.get("gross_revenue", highest_m_p.get("net_revenue", 0)) / tot_p_rev * 100)
+
+                # Kiểm tra nếu sản phẩm chủ lực có biên mỏng hoặc chênh lệch lớn so với sản phẩm biên cao nhất
+                if lowest_m_p.get("gross_margin_pct", 0) < 48 or (highest_m_p.get("gross_margin_pct", 0) - top_p_rev.get("gross_margin_pct", 0) > 6):
+                    p_name = lowest_m_p.get("product_name", lowest_m_p.get("label", "Sản phẩm"))
+                    h_name = highest_m_p.get("product_name", highest_m_p.get("label", "Sản phẩm"))
+                    matrix.append({
+                        "id": f"RC_{len(matrix)+1:02d}",
+                        "title": f"Cơ Cấu Sản Phẩm Lệch Pha: Doanh Số Phụ Thuộc Vào Nhóm Biên Lãi Mỏng ({p_name})",
+                        "severity": "CRITICAL" if lowest_m_p.get("gross_margin_pct", 0) < 42 else "WARNING",
+                        "badge_color": "rose" if lowest_m_p.get("gross_margin_pct", 0) < 42 else "amber",
+                        "icon": "fa-boxes-stacked text-amber-500",
+                        "problem": f"Sản phẩm chủ lực '{top_p_rev.get('product_name', top_p_rev.get('label'))}' đóng góp doanh thu lớn nhất ({top_p_rev.get('gross_revenue', top_p_rev.get('net_revenue', 0)):,.0f} đ, chiếm {top_p_share:.1f}% tổng doanh số), nhưng biên lợi nhuận gộp chỉ đạt {top_p_rev.get('gross_margin_pct', 0):.1f}%. Trong khi đó, sản phẩm '{h_name}' có biên lãi cao nhất ({highest_m_p.get('gross_margin_pct', 0):.1f}%) nhưng chỉ chiếm {highest_m_share:.1f}% doanh số.",
+                        "evidence": f"Chi phí giá vốn của '{p_name}' lên tới {lowest_m_p.get('cogs', 0):,.0f} đ, làm xói mòn thặng dư gộp của toàn bộ danh mục sản phẩm.",
+                        "root_cause": "Chính sách bán hàng và hiển thị ưu tiên sản phẩm phễu nhưng thiếu chiến lược đóng gói bán kèm (Cross-sell / Bundle) sản phẩm phụ kiện và SKU có biên lợi nhuận cao.",
+                        "urgent_solution": f"Thiết lập ngay gói combo bán kèm '{top_p_rev.get('product_name', top_p_rev.get('label'))}' với '{h_name}' để kéo biên lợi nhuận trung bình giỏ hàng lên trên 48%.",
+                        "medium_solution": f"Đàm phán lại biểu phí nhập hàng / gia công với nhà cung ứng cho sản phẩm '{p_name}' theo cam kết sản lượng lớn để giảm 5-8% giá vốn.",
+                        "strategic_solution": "Tái cấu trúc ma trận danh mục sản phẩm (BCG Matrix): Định vị SKU phễu hút traffic, tối đa hóa thặng dư lợi nhuận ròng qua các SKU biên cao.",
+                        "expected_impact": "Nâng biên lợi nhuận gộp toàn chuỗi thêm +3.5% đến +5.2%, gia tăng đáng kể dòng tiền thặng dư cho doanh nghiệp."
+                    })
+
+            # Step C: Channel Breakdown Analysis (Returns, Channel Imbalance, Offline vs Online)
+            channels = list(channel_breakdown) if channel_breakdown else []
+            if not channels:
+                ch_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["kênh", "kenh", "channel", "nền tảng", "platform"])), None)
+                rev_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["doanh thu", "revenue", "gross_revenue", "tiền thu"])), None)
+                if ch_col and rev_col:
+                    for ch, grp in df.groupby(ch_col):
+                        r = float(pd.to_numeric(grp[rev_col].astype(str).str.replace(r'[%,đVND\s]', '', regex=True).str.replace(',', '.'), errors='coerce').sum())
+                        channels.append({"label": str(ch).strip(), "channel": str(ch).strip(), "net_revenue": r, "orders": len(grp)})
+
+            # Check for real return rates in channel or pnl (ONLY IF RETURNS EXIST IN DATA)
+            has_real_returns = any(c.get("return_amount", 0) > 0 or c.get("return_rate_pct", 0) > 0 for c in channels) or any(p.get("return_amount", 0) > 0 for p in pnl_records)
+            if has_real_returns:
+                channels_with_ret = [c for c in channels if c.get("return_rate_pct", 0) > 5 or c.get("return_amount", 0) > 1e6]
+                if channels_with_ret:
+                    channels_with_ret.sort(key=lambda x: x.get("return_rate_pct", 0), reverse=True)
+                    worst_ret = channels_with_ret[0]
+                    matrix.append({
+                        "id": f"RC_{len(matrix)+1:02d}",
+                        "title": f"Tỷ Lệ Đổi Trả / Hoàn Hàng Bào Mòn Dòng Tiền Tại Kênh {worst_ret.get('channel', worst_ret.get('label'))}",
+                        "severity": "WARNING",
+                        "badge_color": "amber",
+                        "icon": "fa-arrow-rotate-left text-amber-500",
+                        "problem": f"Kênh {worst_ret.get('channel', worst_ret.get('label'))} ghi nhận tỷ lệ hoàn hàng lên tới {worst_ret.get('return_rate_pct', 0):.1f}% (tương đương {worst_ret.get('return_amount', 0):,.0f} đ giá trị hàng hoàn).",
+                        "evidence": "Phát sinh thêm chi phí logistics 2 chiều và hao hụt bao bì, làm giảm biên lợi nhuận thực tế.",
+                        "root_cause": "Khách hàng nhận hàng không đúng kỳ vọng hình ảnh, tư vấn kích thước/chức năng chưa chuẩn xác, hoặc thời gian giao hàng kéo dài.",
+                        "urgent_solution": "Thắt chặt quy trình kiểm soát chất lượng đóng gói và kích hoạt cuộc gọi xác nhận đơn trước khi giao.",
+                        "medium_solution": "Cập nhật hình ảnh, video mô tả thực tế 360 độ và bảng thông số kỹ thuật chi tiết trên gian hàng.",
+                        "strategic_solution": "Hợp tác chặt chẽ với đơn vị vận chuyển cam kết thời gian giao trong 24-48h.",
+                        "expected_impact": "Kéo giảm tỷ lệ hoàn hàng xuống dưới 7%, thu hồi thêm dòng tiền doanh thu thuần."
+                    })
+
+            # Step D: Timeline Breakdown Analysis (Seasonality Dip / Period-over-period Drop)
+            times = list(timeline_breakdown) if timeline_breakdown else []
+            if not times:
+                date_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["tháng", "thang", "ngày", "ngay", "date", "month", "thời gian"])), None)
+                rev_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["doanh thu", "revenue", "gross_revenue", "tiền thu"])), None)
+                if date_col and rev_col:
+                    t_df = df.groupby(date_col)[rev_col].sum().reset_index()
+                    t_df = t_df.sort_values(by=date_col)
+                    for _, row in t_df.iterrows():
+                        times.append({"label": str(row[date_col]).strip(), "period": str(row[date_col]).strip(), "net_revenue": float(row[rev_col])})
+
+            if len(times) >= 3:
+                dips = []
+                for i in range(1, len(times)):
+                    prev_r = times[i-1].get("net_revenue", 0)
+                    curr_r = times[i].get("net_revenue", 0)
+                    if prev_r > 0:
+                        chg_pct = (curr_r - prev_r) / prev_r * 100
+                        dips.append((chg_pct, times[i-1], times[i]))
+                if dips:
+                    dips.sort(key=lambda x: x[0])
+                    worst_dip, prev_t, dip_t = dips[0]
+                    if worst_dip < -12:
+                        dip_period_name = dip_t.get('date') or dip_t.get('period') or dip_t.get('label') or dip_t.get('month') or dip_t.get('time') or 'Trũng'
+                        prev_period_name = prev_t.get('date') or prev_t.get('period') or prev_t.get('label') or prev_t.get('month') or prev_t.get('time') or 'Trước'
+                        matrix.append({
+                            "id": f"RC_{len(matrix)+1:02d}",
+                            "problem_id": f"RC_{len(matrix)+1:02d}",
+                            "title": f"Sụt Giảm Doanh Thu Chu Kỳ Theo Thời Gian (Điểm Trũng Tại Kỳ {dip_period_name})",
+                            "severity": "WARNING",
+                            "badge_color": "amber",
+                            "icon": "fa-chart-line-down text-amber-500",
+                            "problem": f"Doanh số tại kỳ {dip_period_name} bị sụt giảm sâu xuống {dip_t.get('net_revenue', 0):,.0f} đ (giảm {abs(worst_dip):.1f}% so với kỳ {prev_period_name} đạt {prev_t.get('net_revenue', 0):,.0f} đ).",
+                            "evidence": f"Doanh thu bị hụt {prev_t.get('net_revenue', 0) - dip_t.get('net_revenue', 0):,.0f} đ trong chu kỳ, tạo áp lực lớn lên dòng tiền thanh toán và chi phí duy trì cố định.",
+                            "root_cause": "Khoảng trống kích cầu giữa các đợt cao điểm; độ trễ trong việc tung các bộ sản phẩm mới và thiếu chiến dịch nuôi dưỡng khách hàng định kỳ giữa các giai đoạn giao mùa.",
+                            "urgent_solution": f"Xây dựng lịch kích cầu giữa mùa (Mid-Season Flash Sale) vào tuần thứ 2 của kỳ {dip_period_name} để kích thích sức mua từ tệp khách hàng quen.",
+                            "medium_solution": "Triển khai cơ chế đặt hàng trước (Pre-order) kèm ưu đãi chiết khấu 5-10% từ cuối kỳ trước để san phẳng điểm trũng dòng tiền.",
+                            "strategic_solution": "Đa dạng hóa danh mục sản phẩm phục vụ nhu cầu thường nhật (Seasonless basics) để giảm thiểu tính mùa vụ.",
+                            "expected_impact": "San phẳng biên độ dao động dòng tiền, nâng mức doanh thu kỳ trũng lên tiệm cận mức trung bình toàn năm."
+                        })
+
+            # Step E: Total COGS Overhang / Margin Structure
+            rev_col_f = next((c for c in df.columns if any(k in str(c).lower() for k in ["doanh thu", "revenue", "gross_revenue", "tiền thu"])), None)
+            cogs_col_f = next((c for c in df.columns if any(k in str(c).lower() for k in ["giá vốn", "cogs", "chi phí giá vốn"])), None)
+            tot_rev = (financial_kpis and financial_kpis.get("total_net_revenue")) or sum(p.get("net_revenue", 0) for p in pnl_records) or (float(df[rev_col_f].sum()) if rev_col_f else 0.0)
+            tot_cogs = (financial_kpis and financial_kpis.get("total_cogs")) or sum(p.get("cogs", 0) for p in pnl_records) or (float(df[cogs_col_f].sum()) if cogs_col_f else 0.0)
+            if tot_rev > 0 and tot_cogs > 0:
+                cogs_ratio = (tot_cogs / tot_rev * 100)
+                if cogs_ratio > 50:
+                    matrix.append({
+                        "id": f"RC_{len(matrix)+1:02d}",
+                        "title": f"Chi Phí Giá Vốn (COGS) Chiếm Tỷ Trọng Lớn ({cogs_ratio:.1f}% Doanh Thu)",
+                        "severity": "OPPORTUNITY",
+                        "badge_color": "indigo",
+                        "icon": "fa-coins text-indigo-500",
+                        "problem": f"Tổng chi phí giá vốn toàn bộ tệp đạt {tot_cogs:,.0f} đ, chiếm tới {cogs_ratio:.1f}% tổng doanh thu ({tot_rev:,.0f} đ), khiến biên lợi nhuận gộp toàn bộ giỏ hàng chỉ còn {100 - cogs_ratio:.1f}%.",
+                        "evidence": "Cứ mỗi 100 đồng doanh thu tạo ra, doanh nghiệp phải tiêu tốn hơn 50 đồng cho khâu sản xuất / thu mua hàng hóa.",
+                        "root_cause": "Chưa tối ưu hóa quy mô lô đặt hàng (Economies of Scale); chưa phân tầng nhà cung cấp và thiếu chính sách định giá linh hoạt theo độ nhạy cảm của khách hàng.",
+                        "urgent_solution": "Rà soát lại biểu phí thu mua của top 2 SKU có sản lượng lớn nhất để tìm kiếm giải pháp tối ưu giá vốn từ 3-5%.",
+                        "medium_solution": "Ứng dụng mô hình quản lý tồn kho JIT (Just-in-Time) để giảm chi phí lưu kho, bảo quản và rủi ro lỗi thời sản phẩm.",
+                        "strategic_solution": "Thiết lập quan hệ đối tác chiến lược dài hạn với xưởng sản xuất gốc để cam kết giá nguyên vật liệu ổn định.",
+                        "expected_impact": "Kéo giảm tỷ trọng giá vốn xuống dưới 48% doanh thu, tiết kiệm thêm hàng chục đến hàng trăm triệu đồng chi phí vốn hàng năm."
+                    })
+
+            # Step F: Data Quality & White-Space / Formatting Inconsistency
+            whitespace_dups = []
+            for col in df.columns:
+                if df[col].dtype == object or str(df[col].dtype).startswith('category'):
+                    vals = [str(v) for v in df[col].dropna()]
+                    stripped = [v.strip() for v in vals]
+                    if len(set(vals)) > len(set(stripped)):
+                        diff_vals = [v for v in set(vals) if v != v.strip() and v.strip() in set(vals)]
+                        if diff_vals:
+                            whitespace_dups.append((col, diff_vals[0]))
+
+            if whitespace_dups or (exceptions_list and len(exceptions_list) > 0):
+                sample_col, sample_val = whitespace_dups[0] if whitespace_dups else ("Cột phân loại", "giá trị phân mảnh")
+                matrix.append({
+                    "id": f"RC_{len(matrix)+1:02d}",
+                    "title": "Phân Mảnh Dữ Liệu Báo Cáo Do Trùng Lặp Chuỗi & Lỗi Định Dạng",
+                    "severity": "STRATEGIC",
+                    "badge_color": "purple",
+                    "icon": "fa-broom text-purple-600",
+                    "problem": f"Phát hiện các danh mục dữ liệu bị phân tách không chuẩn tắc do khoảng trắng thừa hoặc lỗi định dạng (ví dụ tại cột '{sample_col}': '{sample_val}'), làm phân mảnh số liệu báo cáo kế toán.",
+                    "evidence": f"Số liệu của cùng một thực thể bị chia nhỏ thành nhiều dòng riêng biệt, gây sai lệch thống kê tổng hợp và làm chậm tốc độ ra quyết định.",
+                    "root_cause": "Khâu nhập liệu thủ công tại các điểm bán và hệ thống phần mềm chưa tích hợp bộ lọc tự động chuẩn hóa chuỗi (Auto-Trim validation) tại cổng tiếp nhận dữ liệu.",
+                    "urgent_solution": "Kích hoạt bộ lọc làm sạch tự động (Auto-Trim & Standardize) trên hệ thống để hợp nhất ngay 100% các dòng dữ liệu bị phân tách.",
+                    "medium_solution": "Cài đặt ràng buộc dữ liệu đầu vào (Data Validation / Dropdown Select) trên giao diện phần mềm bán hàng POS.",
+                    "strategic_solution": "Xây dựng cổng quản trị dữ liệu danh mục gốc (Master Data Management - MDM) đồng bộ dữ liệu chuẩn trên toàn hệ thống.",
+                    "expected_impact": "Chuẩn hóa 100% dữ liệu kế toán và phân bổ chi phí, loại bỏ hoàn toàn nguy cơ sai lệch số liệu khi ra quyết định kinh doanh."
+                })
+
+            # Step G: General Tabular Fallback (If matrix < 3 for arbitrary datasets like Car Sales, Land Price, etc.)
             if len(matrix) < 3:
                 num_cols = []
                 cat_cols = []
@@ -1510,7 +1692,7 @@ class DomainAnalyzer:
                     ratio = (best['mean'] / worst['mean']) if worst['mean'] > 0 else 0
 
                     matrix.append({
-                        "id": f"PROB_0{len(matrix)+1}",
+                        "id": f"RC_{len(matrix)+1:02d}",
                         "title": f"Phân Hóa Cực Đoan Về {preferred_num} Giữa Các Nhóm {preferred_cat}",
                         "severity": "CRITICAL",
                         "badge_color": "rose",
@@ -1525,7 +1707,7 @@ class DomainAnalyzer:
                     })
 
                     matrix.append({
-                        "id": f"PROB_0{len(matrix)+1}",
+                        "id": f"RC_{len(matrix)+1:02d}",
                         "title": f"Biên Độ Biến Động & Rủi Ro Phân Tán Trên Chỉ Số {preferred_num}",
                         "severity": "WARNING",
                         "badge_color": "amber",
@@ -1540,7 +1722,7 @@ class DomainAnalyzer:
                     })
 
                     matrix.append({
-                        "id": f"PROB_0{len(matrix)+1}",
+                        "id": f"RC_{len(matrix)+1:02d}",
                         "title": f"Rủi Ro Tập Trung Giá Trị Vào Nhóm Dẫn Đầu '{best[preferred_cat]}' (Pareto Risk)",
                         "severity": "STRATEGIC",
                         "badge_color": "purple",
@@ -1553,5 +1735,10 @@ class DomainAnalyzer:
                         "strategic_solution": f"Đa dạng hóa danh mục để tránh rủi ro khi thị trường hoặc nhóm '{best[preferred_cat]}' biến động.",
                         "expected_impact": f"Phân tán rủi ro tập trung, gia tăng sức bền của toàn bộ hệ thống."
                     })
+
+        for idx, item in enumerate(matrix):
+            pid = item.get("id") or item.get("problem_id") or f"RC_{idx+1:02d}"
+            item["id"] = pid
+            item["problem_id"] = pid
 
         return matrix

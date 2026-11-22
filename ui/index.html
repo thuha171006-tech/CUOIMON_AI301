@@ -236,15 +236,21 @@
             </button>
 
             <div class="space-y-6">
-                <!-- Brand Thu Hà -->
-                <div class="flex items-center gap-3 px-2">
-                    <div class="w-10 h-10 rounded-2xl bg-white text-[#183634] flex items-center justify-center font-extrabold text-lg shadow-xs border border-[#c5dedd] shrink-0">
-                        <i class="fa-solid fa-chart-pie text-[#183634]"></i>
+                <!-- Brand Thu Hà & Close Button -->
+                <div class="flex items-center justify-between px-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-white text-[#183634] flex items-center justify-center font-extrabold text-lg shadow-xs border border-[#c5dedd] shrink-0">
+                            <i class="fa-solid fa-chart-pie text-[#183634]"></i>
+                        </div>
+                        <div class="sidebar-text truncate">
+                            <h2 class="text-base font-black text-[#0f172a] tracking-tight leading-none truncate">Thu Hà</h2>
+                            <span class="text-[10px] text-[#334155] font-black truncate block mt-0.5">AI Analytics Studio</span>
+                        </div>
                     </div>
-                    <div class="sidebar-text truncate">
-                        <h2 class="text-base font-black text-[#0f172a] tracking-tight leading-none truncate">Thu Hà</h2>
-                        <span class="text-[10px] text-[#334155] font-black truncate block mt-0.5">AI Analytics Studio</span>
-                    </div>
+                    <button type="button" onclick="setSidebarVisible(false)" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white/80 text-xs font-bold flex items-center gap-1 transition cursor-pointer" title="Ẩn thanh công cụ">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                        <span>Ẩn</span>
+                    </button>
                 </div>
 
                 <!-- SIDEBAR NAVIGATION (CỔNG TIẾP NHẬN LÊN ĐẦU TIÊN TRƯỚC BƯỚC 1) -->
@@ -359,8 +365,9 @@
             <!-- =================================================================== -->
             <section class="bg-white rounded-2xl p-4 border-2 border-[#fad2e1] flex flex-col lg:flex-row items-center justify-between gap-3 shadow-sm">
                 <div class="flex items-center gap-2 shrink-0">
-                    <button type="button" onclick="toggleSidebar()" class="p-2 rounded-xl bg-white border border-[#c5dedd] text-[#183634] hover:bg-[#c5dedd]/40 cursor-pointer shadow-xs transition shrink-0" title="Bấm để hiện / ẩn thanh công cụ">
+                    <button type="button" onclick="toggleSidebar()" class="px-3 py-2 rounded-xl bg-white border border-[#c5dedd] text-[#183634] hover:bg-[#c5dedd]/40 cursor-pointer shadow-xs transition shrink-0 flex items-center gap-1.5" title="Bấm để hiện / ẩn thanh công cụ">
                         <i class="fa-solid fa-bars text-sm sidebar-menu-toggle-icon"></i>
+                        <span class="text-xs font-bold text-[#183634]">Thanh Công Cụ</span>
                     </button>
                     <span class="text-xs font-black uppercase tracking-wider text-[#183634] flex items-center gap-1.5">
                         <i class="fa-solid fa-network-wired text-[#5eaba0]"></i> Luồng Phân Tích:
@@ -2052,12 +2059,12 @@
                         <div id="rep-sec-exports" class="bg-white rounded-3xl border border-slate-200/80 shadow-card p-6 sm:p-7 space-y-5">
                             <div class="flex items-center justify-between pb-3 border-b border-slate-100">
                                 <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
-                                    <i class="fa-solid fa-file-export text-[#183634]"></i> 4. Xuất Báo Cáo Kết Quả Độc Lập (4 Sản Phẩm)
+                                    <i class="fa-solid fa-file-export text-[#183634]"></i> 4. Xuất Báo Cáo Kết Quả Độc Lập &amp; Nhật Ký Kiểm Toán (5 Sản Phẩm)
                                 </h3>
                                 <span class="text-xs text-slate-400">Xuất tệp độc lập dùng cho trình bày, lưu trữ và kiểm toán</span>
                             </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                                 <!-- File 1: Excel -->
                                 <div class="p-4 bg-white rounded-2xl border-2 border-[#c5dedd] flex flex-col justify-between space-y-3 shadow-xs">
                                     <div>
@@ -2113,6 +2120,58 @@
                                         <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Mở Dashboard</span>
                                     </button>
                                 </div>
+
+                                <!-- File 5: Nhật Ký Kiểm Toán CSV -->
+                                <div class="p-4 bg-white rounded-2xl border-2 border-[#c5dedd] flex flex-col justify-between space-y-3 shadow-xs">
+                                    <div>
+                                        <div class="w-10 h-10 rounded-xl bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd] flex items-center justify-center text-lg mb-2">
+                                            <i class="fa-solid fa-clipboard-check"></i>
+                                        </div>
+                                        <h4 class="text-xs font-extrabold text-slate-900">Kiểm Toán (.csv)</h4>
+                                        <p class="text-[11px] text-slate-400 mt-1">Truy vết 100% lịch sử xử lý, bóc tách lỗi, can thiệp quy tắc &amp; phân tích.</p>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <button onclick="exportAuditTrailCsv()" class="btn-smooth w-full py-2 bg-[#183634] hover:bg-[#183634]Dark text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer">
+                                            <i class="fa-solid fa-download"></i> <span>Tải CSV</span>
+                                        </button>
+                                        <button onclick="goToStep('audit')" class="btn-smooth w-full py-1.5 bg-[#c5dedd]/30 hover:bg-[#c5dedd] text-[#183634] font-bold text-[10px] rounded-xl flex items-center justify-center gap-1 cursor-pointer">
+                                            <i class="fa-solid fa-list-check"></i> <span>Xem Chi Tiết</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bảng Nhật Ký Kiểm Toán Trực Tiếp (Live Audit Trail trong Bước 5) -->
+                            <div class="mt-6 pt-5 border-t border-slate-100 space-y-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <h4 class="text-xs font-black uppercase text-[#183634] tracking-wider flex items-center gap-2">
+                                        <i class="fa-solid fa-clock-rotate-left text-[#183634]"></i> Nhật Ký Kiểm Toán Tiến Trình (Live Audit Trail)
+                                    </h4>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="exportAuditTrailCsv()" class="btn-smooth px-3 py-1 rounded-lg text-[11px] font-bold bg-[#c5dedd]/40 text-[#183634] border border-[#c5dedd] hover:bg-[#c5dedd] cursor-pointer">
+                                            <i class="fa-solid fa-file-csv mr-1"></i> Xuất CSV
+                                        </button>
+                                        <button type="button" onclick="goToStep('audit')" class="btn-smooth px-3 py-1 rounded-lg text-[11px] font-bold bg-[#183634] text-white hover:bg-[#183634]Dark cursor-pointer">
+                                            <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> Mở Trang Kiểm Toán Đầy Đủ
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-2xs">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-50 text-slate-700 font-extrabold text-[11px] uppercase tracking-wider border-b border-slate-200">
+                                            <tr>
+                                                <th class="py-2.5 px-3">Thời gian</th>
+                                                <th class="py-2.5 px-3 text-center">Cấp độ</th>
+                                                <th class="py-2.5 px-3">Tiến trình</th>
+                                                <th class="py-2.5 px-3">Công cụ</th>
+                                                <th class="py-2.5 px-4">Nội dung ghi nhận</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="step5AuditTrailTable" class="divide-y divide-slate-100 font-medium text-slate-700">
+                                            <tr><td colspan="5" class="py-6 text-center text-slate-400 italic">Đang đồng bộ nhật ký kiểm toán...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
@@ -2147,6 +2206,9 @@
                             </h3>
                         </div>
                         <div class="flex items-center gap-2">
+                            <button type="button" onclick="goToStep(5)" class="btn-smooth px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#183634] text-white hover:bg-[#183634]Dark flex items-center gap-1.5 shadow-xs cursor-pointer">
+                                <i class="fa-solid fa-arrow-left"></i> Quay lại Báo Cáo Bước 5
+                            </button>
                             <span class="px-3 py-1 rounded-full text-xs font-bold bg-[#c5dedd]/20 text-[#c5dedd]/80 border border-[#c5dedd]/30">
                                 <i class="fa-solid fa-shield-halved text-[#c5dedd] mr-1"></i> Bất biến &amp; Ghi nhận tự động
                             </span>
@@ -2259,6 +2321,14 @@
         }
         window.renderCleanedOrdersTable = renderCleanedOrdersTable;
 
+        // Khai báo an toàn tuyệt đối cho bộ lọc và selector biểu đồ
+        var populateCustomChartSelectors = function(data) {
+            if (typeof window._populateCustomChartSelectorsInternal === 'function') {
+                return window._populateCustomChartSelectorsInternal(data);
+            }
+        };
+        window.populateCustomChartSelectors = populateCustomChartSelectors;
+
         // ===================================================================
         // WORKFLOW CONTROLLER: 5 BƯỚC TIẾN TRÌNH THEO LUỒNG KHOA HỌC
         // ===================================================================
@@ -2280,49 +2350,56 @@
         let userCustomCharts = [];
         let step5CustomChartInstances = {};
 
-        function populateCustomChartSelectors(data) {
-            const dimSelect = document.getElementById('customChartDimension');
-            const metricSelect = document.getElementById('customChartMetric');
-            if (!dimSelect || !metricSelect || !data) return;
+        function _populateCustomChartSelectorsInternal(data) {
+            try {
+                const dimSelect = document.getElementById('customChartDimension');
+                const metricSelect = document.getElementById('customChartMetric');
+                if (!dimSelect || !metricSelect || !data) return;
 
-            const records = data.cleaned_orders_table || [];
-            const metaCols = (data.dataset_meta && data.dataset_meta.original_columns) || [];
-            let allCols = metaCols.length > 0 ? metaCols : (records[0] ? Object.keys(records[0]) : []);
-            const sysExclude = new Set(['stt', 'cleaning_status', 'attribution_note', 'attributed_gross', 'attributed_net_rev', 'attributed_return', 'attributed_cogs', 'attributed_discount']);
-            allCols = allCols.filter(c => !sysExclude.has(c) && !String(c).startsWith('_'));
+                const records = data.cleaned_orders_table || [];
+                const metaCols = (data.dataset_meta && data.dataset_meta.original_columns) || [];
+                let allCols = metaCols.length > 0 ? metaCols : (records[0] ? Object.keys(records[0]) : []);
+                const sysExclude = new Set(['stt', 'cleaning_status', 'attribution_note', 'attributed_gross', 'attributed_net_rev', 'attributed_return', 'attributed_cogs', 'attributed_discount']);
+                allCols = allCols.filter(c => !sysExclude.has(c) && !String(c).startsWith('_'));
 
-            if (allCols.length === 0) return;
+                if (allCols.length === 0) return;
 
-            const profiling = data.column_profiling || [];
-            const numCols = [];
-            const catCols = [];
+                const profiling = data.column_profiling || [];
+                const numCols = [];
+                const catCols = [];
 
-            allCols.forEach(col => {
-                const prof = profiling.find(p => p.column_name === col || p.column_key === col);
-                if (prof) {
-                    if (prof.data_type && prof.data_type.startsWith('Số')) {
-                        numCols.push(col);
+                allCols.forEach(col => {
+                    const prof = profiling.find(p => p.column_name === col || p.column_key === col);
+                    if (prof) {
+                        if (prof.data_type && prof.data_type.startsWith('Số')) {
+                            numCols.push(col);
+                        } else {
+                            catCols.push(col);
+                        }
                     } else {
-                        catCols.push(col);
+                        const sample = records.slice(0, 10).map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
+                        const isNum = sample.length > 0 && sample.every(v => !isNaN(Number(String(v).replace(/[%,đVND\s]/g, '').replace(',', '.'))));
+                        if (isNum) numCols.push(col);
+                        else catCols.push(col);
                     }
-                } else {
-                    const sample = records.slice(0, 10).map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
-                    const isNum = sample.length > 0 && sample.every(v => !isNaN(Number(String(v).replace(/[%,đVND\s]/g, '').replace(',', '.'))));
-                    if (isNum) numCols.push(col);
-                    else catCols.push(col);
-                }
-            });
+                });
 
-            // Populate Dimension select
-            const dimOptions = catCols.length > 0 ? catCols : allCols;
-            dimSelect.innerHTML = dimOptions.map((c, i) => `<option value="${c}" ${i === 0 ? 'selected' : ''}>${c}</option>`).join('');
+                // Populate Dimension select
+                const dimOptions = catCols.length > 0 ? catCols : allCols;
+                dimSelect.innerHTML = dimOptions.map((c, i) => `<option value="${c}" ${i === 0 ? 'selected' : ''}>${c}</option>`).join('');
 
-            // Populate Metric select
-            const metricOptions = numCols.length > 0 ? numCols : allCols;
-            metricSelect.innerHTML = metricOptions.map((c, i) => `<option value="${c}" ${i === 0 ? 'selected' : ''}>${c}</option>`).join('') + `<option value="__COUNT__">Số lượng bản ghi (Đếm dòng / Records)</option>`;
+                // Populate Metric select
+                const metricOptions = numCols.length > 0 ? numCols : allCols;
+                metricSelect.innerHTML = metricOptions.map((c, i) => `<option value="${c}" ${i === 0 ? 'selected' : ''}>${c}</option>`).join('') + `<option value="__COUNT__">Số lượng bản ghi (Đếm dòng / Records)</option>`;
 
-            autoUpdateCustomChartTitle();
+                autoUpdateCustomChartTitle();
+            } catch (err) {
+                console.warn('populateCustomChartSelectors caught:', err);
+            }
         }
+        window._populateCustomChartSelectorsInternal = _populateCustomChartSelectorsInternal;
+        window.populateCustomChartSelectors = _populateCustomChartSelectorsInternal;
+        var populateCustomChartSelectors = _populateCustomChartSelectorsInternal;
 
         function autoUpdateCustomChartTitle() {
             const dim = document.getElementById('customChartDimension')?.value || 'channel';
@@ -4252,6 +4329,7 @@
             renderProductTable(data.product_breakdown || []);
             renderTimelineTable(data.timeline_breakdown || []);
             renderProblemSolutionMatrix(data.problem_solution_matrix || []);
+            renderStep4DiagnosisAndSolutions();
 
             const activeAngles = data.analysis_dimensions?.total_active_angles || 3;
             const aiBadgeText = document.getElementById('aiAngleBadgeText');
@@ -4580,115 +4658,121 @@
                 return;
             }
 
-            // 1. Root Cause Cards
-            rootGrid.innerHTML = `
-                <div class="p-5 rounded-2xl bg-[#fde2e4]/50 border border-[#fad2e1]/70 space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-black text-[#872D43] flex items-center gap-2">
-                            <i class="fa-solid fa-tags text-[#fad2e1]"></i> 1. Trượt Giá Sàn & Bào Mòn Do Voucher
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#fad2e1] text-white">RỦI RO CAO</span>
+            // 1. Chẩn đoán nguyên nhân gốc rễ (Root Cause Analysis) thích ứng 100% theo dữ liệu thực tế
+            const rootCauses = (lastApiResponse && (lastApiResponse.problem_solution_matrix || lastApiResponse.root_causes)) || [];
+            
+            if (rootCauses.length === 0) {
+                rootGrid.innerHTML = `
+                    <div class="col-span-full p-8 rounded-3xl bg-emerald-50/80 border border-emerald-200 text-center space-y-2">
+                        <i class="fa-solid fa-circle-check text-3xl text-emerald-600 block mb-1"></i>
+                        <h4 class="text-xs font-black text-emerald-900 uppercase">Dữ liệu ổn định - Chưa phát hiện bất thường nghiêm trọng</h4>
+                        <p class="text-xs text-emerald-700 max-w-md mx-auto">
+                            Các chỉ số P&L và kênh bán hàng đang vận hành bình thường theo tệp dữ liệu đã tải lên.
+                        </p>
                     </div>
-                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
-                        Cộng dồn mã chiết khấu không giới hạn cùng voucher sàn làm giảm biên đóng góp thực tế (CM hiện tại: <strong>${formatVND(cm)}</strong>). Các đơn hàng có mức chiết khấu > 25% dẫn đến tình trạng bán âm dòng tiền.
-                    </p>
-                    <div class="text-[11px] text-[#872D43] font-bold bg-white/70 p-2 rounded-xl border border-[#fad2e1]/40">
-                        <i class="fa-solid fa-triangle-exclamation mr-1"></i> Tác động: Cần thiết lập Hard Rule giá sàn trên hệ thống OMS ngay lập tức.
-                    </div>
-                </div>
+                `;
+            } else {
+                const getSeverityBadge = (sev) => {
+                    const s = String(sev || '').toUpperCase();
+                    if (s.includes('CRITICAL') || s.includes('NGUY CẤP') || s.includes('NGHIÊM TRỌNG')) {
+                        return { text: 'NGHIÊM TRỌNG', bg: 'bg-[#fad2e1] text-[#872D43] border border-[#fad2e1]', cardBg: 'bg-[#fde2e4]/40 border-[#fad2e1]', icon: 'fa-triangle-exclamation text-[#872D43]' };
+                    }
+                    if (s.includes('HIGH') || s.includes('CAO') || s.includes('CẢNH BÁO')) {
+                        return { text: 'RỦI RO CAO', bg: 'bg-[#fed9b7] text-[#9a3412] border border-[#fed9b7]', cardBg: 'bg-[#fed9b7]/20 border-[#fed9b7]', icon: 'fa-circle-exclamation text-[#9a3412]' };
+                    }
+                    return { text: 'CẦN TỐI ƯU', bg: 'bg-[#c5dedd] text-[#183634] border border-[#c5dedd]', cardBg: 'bg-white border-[#c5dedd]', icon: 'fa-chart-pie text-[#183634]' };
+                };
 
-                <div class="p-5 rounded-2xl bg-[#fde2e4]/50 border border-[#c5dedd] space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-black text-[#0f172a] font-black text-lg flex items-center gap-2">
-                            <i class="fa-solid fa-truck-fast text-[#c5dedd]"></i> 2. Rủi Ro Vận Hành & Tỷ Lệ Hoàn Huỷ Đơn
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#c5dedd] text-[#183634]">VẬN HÀNH</span>
-                    </div>
-                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
-                        Giá trị hàng hoàn huỷ đạt <strong>${formatVND(returns)}</strong>. Phương thức giao COD không qua xác thực tự động khiến tỷ lệ bom hàng và chi phí vận chuyển hai chiều bào mòn lợi nhuận ròng.
-                    </p>
-                    <div class="text-[11px] text-[#183634] font-bold bg-white/70 p-2 rounded-xl border border-[#c5dedd]">
-                        <i class="fa-solid fa-shield-halved mr-1 text-[#c5dedd]"></i> Tác động: Tích hợp API Zalo/SMS xác thực đơn trước khi xuất kho.
-                    </div>
-                </div>
+                const icons = ['fa-chart-line', 'fa-calendar-xmark', 'fa-boxes-stacked', 'fa-tags', 'fa-truck-fast', 'fa-coins'];
 
-                <div class="p-5 rounded-2xl bg-white border border-[#c5dedd] space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-black text-[#0f172a] font-black text-lg flex items-center gap-2">
-                            <i class="fa-solid fa-bullhorn text-[#c5dedd]"></i> 3. Hiệu Quả Marketing & Kênh Bán Hàng
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#c5dedd] text-[#183634]">PHÂN BỔ</span>
-                    </div>
-                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
-                        Tổng chi phí tiếp thị ghi nhận <strong>${formatVND(costs)}</strong>. Phân tích Causal Uplift chỉ ra một số chiến dịch có doanh thu kế toán cao nhưng tăng trưởng hữu cơ (incremental) thấp, chịu phí sàn cao.
-                    </p>
-                    <div class="text-[11px] text-[#183634] font-bold bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <i class="fa-solid fa-arrow-trend-up mr-1 text-[#c5dedd]"></i> Tác động: Chuyển dịch ngân sách sang kênh trực tiếp (Website/D2C).
-                    </div>
-                </div>
+                rootGrid.innerHTML = rootCauses.map((rc, idx) => {
+                    const cfg = getSeverityBadge(rc.severity);
+                    const icon = icons[idx % icons.length];
+                    const title = rc.title || `Vấn đề trọng yếu #${idx + 1}`;
+                    const evidence = rc.evidence || rc.problem || '';
+                    const cause = rc.root_cause || '';
+                    const urgent = rc.urgent_solution || rc.action || '';
+                    const impact = rc.expected_impact || '';
 
-                <div class="p-5 rounded-2xl bg-white border border-[#c5dedd] space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-black text-[#0f172a] font-black text-lg flex items-center gap-2">
-                            <i class="fa-solid fa-boxes-packing text-[#fad2e1]"></i> 4. Cơ Cấu Giá Vốn & Giá Trị Đơn (AOV)
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#fad2e1]/40 text-[#872D43]">DANH MỤC</span>
-                    </div>
-                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
-                        Cơ cấu sản phẩm phụ kiện biên mỏng chưa được đóng gói thành combo với nhóm hàng chủ lực, dẫn đến chi phí đóng gói cố định chiếm tỷ trọng lớn trên mỗi đơn giá trị nhỏ.
-                    </p>
-                    <div class="text-[11px] text-[#872D43] font-bold bg-[#fde2e4] p-2 rounded-xl border border-[#fad2e1]">
-                        <i class="fa-solid fa-box-open mr-1 text-[#fad2e1]"></i> Tác động: Thiết lập các gói combo tăng giá trị đơn hàng AOV thêm 15%.
-                    </div>
-                </div>
-            `;
+                    return `
+                        <div class="p-5 rounded-2xl ${cfg.cardBg} border space-y-3 shadow-2xs hover:shadow-md transition-all">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-black text-[#183634] flex items-center gap-2">
+                                    <i class="fa-solid ${icon} ${cfg.icon}"></i> ${idx + 1}. ${title}
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide ${cfg.bg}">${cfg.text}</span>
+                            </div>
+                            
+                            ${evidence ? `
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                    <i class="fa-solid fa-magnifying-glass-chart text-[9px]"></i> Hiện trạng & Bằng chứng dữ liệu:
+                                </span>
+                                <p class="text-xs text-slate-700 leading-relaxed font-medium bg-white/70 p-2.5 rounded-xl border border-slate-200/60">
+                                    ${evidence}
+                                </p>
+                            </div>
+                            ` : ''}
 
-            // 2. Initialize and render solutions from dataset recommendations or default domain solutions
-            const recs = (lastApiResponse && lastApiResponse.recommendations) || [];
-            if (recs && recs.length > 0) {
-                window.currentStep4Solutions = recs.map((r, idx) => {
-                    const isDanger = r.decision_badge === 'danger' || (r.decision && r.decision.includes('TÁI CƠ CẤU')) || (r.decision && r.decision.includes('BẢO TRÌ'));
-                    const isSuccess = r.decision_badge === 'success' || (r.decision && r.decision.includes('MỞ RỘNG')) || (r.decision && r.decision.includes('ĐẨY MẠNH'));
+                            ${cause ? `
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-[#872D43] flex items-center gap-1">
+                                    <i class="fa-solid fa-bullseye text-[9px]"></i> Nguyên nhân gốc rễ (Root Cause):
+                                </span>
+                                <p class="text-xs text-slate-700 leading-relaxed font-semibold">
+                                    ${cause}
+                                </p>
+                            </div>
+                            ` : ''}
+
+                            ${(urgent || impact) ? `
+                            <div class="text-[11px] text-[#183634] font-bold bg-[#c5dedd]/30 p-2.5 rounded-xl border border-[#c5dedd]/60 space-y-1">
+                                ${urgent ? `<div><i class="fa-solid fa-bolt text-[#183634] mr-1"></i> <span class="font-extrabold">Hành động:</span> ${urgent}</div>` : ''}
+                                ${impact ? `<div class="text-[10px] text-slate-600 font-semibold mt-1"><i class="fa-solid fa-arrow-trend-up text-emerald-600 mr-1"></i> <span class="font-bold">Kỳ vọng:</span> ${impact}</div>` : ''}
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 2. Hệ thống Đề xuất Hành động Bước 4: Khởi tạo 100% đồng bộ theo các nguyên nhân gốc rễ thực tế
+            if (rootCauses.length > 0) {
+                window.currentStep4Solutions = rootCauses.map((rc, idx) => {
+                    const isDanger = String(rc.severity || '').toUpperCase().includes('CRITICAL') || String(rc.severity || '').toUpperCase().includes('HIGH');
+                    const actions = [];
+                    if (rc.urgent_solution) actions.push(rc.urgent_solution);
+                    if (rc.long_term_strategy) actions.push(rc.long_term_strategy);
+                    if (actions.length === 0) actions.push(`Tối ưu hóa và giám sát số liệu ${rc.title || 'trọng yếu'}`);
+
                     return {
                         id: idx + 1,
-                        title: `${r.campaign_name || 'Chiến Lược'} — ${r.decision || 'Đề Xuất Hành Động'}`,
-                        priority: isDanger ? 'Ưu tiên cấp thiết' : (isSuccess ? 'Ưu tiên cao' : 'Ưu tiên vừa'),
+                        title: `${rc.title || 'Chiến Lược'} — ${rc.urgent_solution ? rc.urgent_solution.slice(0, 42) + '...' : 'Đề Xuất Khắc Phục'}`,
+                        priority: isDanger ? 'Ưu tiên cấp thiết' : 'Ưu tiên cao',
                         priorityColor: isDanger ? 'danger' : 'medium',
-                        desc: r.primary_reason || '',
-                        actions: r.action_items || [],
-                        metric: (r.data_needed && r.data_needed.length > 0) ? `Đo lường: ${r.data_needed[0]}` : 'Đo lường: Tối ưu hiệu quả tài chính và bảo vệ biên lợi nhuận.'
+                        desc: `${rc.problem || ''} ${rc.root_cause ? ('(Nguyên nhân: ' + rc.root_cause + ')') : ''}`.trim(),
+                        actions: actions,
+                        metric: rc.expected_impact ? `Đo lường & Kỳ vọng: ${rc.expected_impact}` : 'Đo lường: Tối ưu hiệu quả tài chính và bảo vệ biên lợi nhuận.'
                     };
                 });
             } else {
-                window.currentStep4Solutions = [
-                    {
-                        id: 1,
-                        title: 'Thiết lập rào cản Giá sàn (Price Floor) & Chặn cộng dồn mã chiết khấu',
-                        priority: 'Ưu tiên cấp thiết',
-                        priorityColor: 'danger',
-                        desc: 'Cài đặt Hard Rule trên hệ thống OMS: Giới hạn tổng chiết khấu không vượt 25% giá niêm yết; tự động chặn xuất kho mọi đơn hàng có biên lợi nhuận gộp sau chiết khấu < 10%. Các đơn vi phạm chuyển sang luồng CFO phê duyệt.',
-                        actions: ['Cài đặt Hard Rule trên hệ thống OMS', 'Giới hạn tổng chiết khấu không vượt 25%'],
-                        metric: 'Đo lường: Triệt tiêu 100% đơn bán âm, bảo toàn toàn bộ dòng tiền cho doanh nghiệp.'
-                    },
-                    {
-                        id: 2,
-                        title: 'Chấm điểm rủi ro & Xác thực tự động đơn hàng giao COD',
-                        priority: 'Ưu tiên cao',
-                        priorityColor: 'danger',
-                        desc: 'Tích hợp API tự động gửi tin Zalo ZNS / SMS xác nhận đối với đơn COD trị giá > 2.000.000 đ hoặc tài khoản có tỷ lệ nhận hàng thấp. Nâng cấp quy chuẩn bọc chống sốc 3 lớp có tem niêm phong chống tráo đổi.',
-                        actions: ['Tích hợp API gửi tin Zalo ZNS / SMS xác nhận đơn COD', 'Nâng cấp quy chuẩn bọc chống sốc có tem niêm phong'],
-                        metric: 'Đo lường: Kéo giảm tỷ lệ hoàn huỷ đơn COD, tiết kiệm chi phí đóng gói & vận chuyển logistics.'
-                    },
-                    {
-                        id: 3,
-                        title: 'Theo dõi Doanh thu theo Kênh & Đẩy mạnh Kênh Website trực tiếp',
-                        priority: 'Ưu tiên vừa',
-                        priorityColor: 'medium',
-                        desc: 'Chuyển dịch 20% ngân sách marketing sang thúc đẩy kênh Website trực tiếp (Margin cao không chịu phí sàn). Thiết lập gói combo "Sản phẩm bán chạy + Phụ kiện tồn kho chậm luân chuyển" và voucher 10% cho đơn kế tiếp.',
-                        actions: ['Chuyển dịch 20% ngân sách marketing sang kênh Website trực tiếp', 'Thiết lập gói combo sản phẩm chủ lực + phụ kiện'],
-                        metric: 'Đo lường: Tăng +15% giá trị đơn hàng trung bình (AOV), nâng tỷ trọng kênh Website.'
-                    }
-                ];
+                const recs = (lastApiResponse && lastApiResponse.recommendations) || [];
+                if (recs && recs.length > 0) {
+                    window.currentStep4Solutions = recs.map((r, idx) => {
+                        const isDanger = r.decision_badge === 'danger';
+                        return {
+                            id: idx + 1,
+                            title: `${r.campaign_name || 'Chiến Lược'} — ${r.decision || 'Đề Xuất Hành Động'}`,
+                            priority: isDanger ? 'Ưu tiên cấp thiết' : 'Ưu tiên cao',
+                            priorityColor: isDanger ? 'danger' : 'medium',
+                            desc: r.primary_reason || '',
+                            actions: r.action_items || [],
+                            metric: (r.data_needed && r.data_needed.length > 0) ? `Đo lường: ${r.data_needed[0]}` : 'Đo lường: Tối ưu hiệu quả tài chính.'
+                        };
+                    });
+                } else {
+                    window.currentStep4Solutions = [];
+                }
             }
             renderStep4SolutionsFromState();
         }
@@ -7780,9 +7864,19 @@
                 const raw = localStorage.getItem('thuha_audit_logs');
                 if (raw) {
                     const arr = JSON.parse(raw);
-                    if (Array.isArray(arr)) currentAuditLogs = arr;
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        currentAuditLogs = arr;
+                        return;
+                    }
                 }
             } catch (e) {}
+            // Khởi tạo nhật ký hệ thống mặc định nếu chưa có
+            const now = _auditNow();
+            currentAuditLogs = [
+                { timestamp: now, level: 'INFO', step: 'Hệ Thống', tool_name: 'StudioSystem', message: 'Khởi động DataLens Studio v3.5 thành công. Sẵn sàng tiếp nhận dữ liệu.' },
+                { timestamp: now, level: 'INFO', step: 'Kiểm Toán', tool_name: 'AuditEngine', message: 'Hệ thống kiểm toán bất biến (Audit Trail) đã được kích hoạt và đồng bộ thời gian thực.' }
+            ];
+            _saveAuditToStorage();
         }
 
         function _saveAuditToStorage() {
@@ -7888,6 +7982,29 @@
                     <td class="p-3 text-slate-700 font-sans">${_auditEscape(log.message)}</td>
                 </tr>
             `).join('');
+
+            // Đồng bộ bảng Kiểm Toán Trực Tiếp trong Báo Cáo Bước 5
+            const step5Tbody = document.getElementById('step5AuditTrailTable');
+            if (step5Tbody) {
+                if (!logs.length) {
+                    step5Tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic">Chưa có sự kiện nào. Hãy tải tệp dữ liệu ở Bước 1.</td></tr>`;
+                } else {
+                    const topLogs = logs.slice(0, 10);
+                    step5Tbody.innerHTML = topLogs.map(log => `
+                        <tr class="hover:bg-slate-50/80">
+                            <td class="py-2.5 px-3 text-slate-500 whitespace-nowrap">${_auditEscape(log.timestamp)}</td>
+                            <td class="py-2.5 px-3 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${levelBadges[log.level] || 'bg-slate-50 text-slate-600 border-slate-200'}">
+                                    ${_auditEscape(log.level)}
+                                </span>
+                            </td>
+                            <td class="py-2.5 px-3 text-slate-800 font-bold">${_auditEscape(log.step)}</td>
+                            <td class="py-2.5 px-3 text-slate-600">${_auditEscape(log.tool_name)}</td>
+                            <td class="py-2.5 px-4 text-slate-700 font-sans">${_auditEscape(log.message)}</td>
+                        </tr>
+                    `).join('');
+                }
+            }
         }
 
         function filterAuditLevel(level) {
@@ -8282,6 +8399,10 @@
             chatBox.appendChild(userMsg);
             input.value = '';
 
+            window.copilotHistory = window.copilotHistory || [];
+            window.copilotHistory.push({ role: 'user', content: query });
+            recordAuditTrail("Cố Vấn Gemini", `Đặt câu hỏi: ${query.slice(0, 100)}`, "CopilotChat", "INFO");
+
             const loadingMsg = document.createElement('div');
             loadingMsg.className = 'p-3 bg-white text-indigo-700 rounded-2xl border border-indigo-100 text-xs flex items-center gap-2 shadow-xs';
             loadingMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-forshop-sidebar"></i> Gemini đang phân tích dữ liệu và suy nghĩ câu trả lời...`;
@@ -8292,10 +8413,16 @@
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query })
+                    body: JSON.stringify({
+                        query: query,
+                        summary: lastApiResponse,
+                        history: window.copilotHistory
+                    })
                 });
                 const data = await res.json().catch(() => ({}));
                 const answerText = data.answer || data.error || "Hệ thống đang bận phân tích, vui lòng gửi lại câu hỏi.";
+                window.copilotHistory.push({ role: 'assistant', content: answerText });
+
                 loadingMsg.className = 'p-3.5 bg-white text-slate-700 rounded-2xl border border-slate-100 text-xs shadow-xs max-w-[85%]';
                 loadingMsg.innerHTML = `
                     <div class="flex items-center gap-2 mb-1.5 pb-1 border-b border-slate-100">
@@ -9149,10 +9276,19 @@
             setSidebarVisible(!isSidebarVisible);
         }
 
-        // Tự ẩn lại thanh công cụ sau khi người dùng chọn một mục
+        // Tự ẩn lại thanh công cụ sau khi người dùng chọn một mục hoặc bấm ra ngoài
         document.addEventListener('click', function (ev) {
-            const btn = ev.target.closest && ev.target.closest('#appSidebar .side-btn');
-            if (btn && isSidebarVisible) setTimeout(() => setSidebarVisible(false), 150);
+            if (!isSidebarVisible) return;
+            const sidebar = document.getElementById('appSidebar');
+            const clickedInsideSidebar = sidebar && sidebar.contains(ev.target);
+            const clickedToggle = ev.target.closest && (ev.target.closest('#sidebarToggleBtn') || ev.target.closest('[onclick*="toggleSidebar"]'));
+            const clickedSideBtn = ev.target.closest && ev.target.closest('#appSidebar .side-btn');
+
+            if (clickedSideBtn) {
+                setTimeout(() => setSidebarVisible(false), 120);
+            } else if (!clickedInsideSidebar && !clickedToggle) {
+                setSidebarVisible(false);
+            }
         });
 
         // ==========================================
