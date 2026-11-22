@@ -182,19 +182,77 @@ class ReconciliationSkill:
             return cleaned_data, exceptions
 
         if not df_tx.empty:
-            # 1. Standardize column names from Vietnamese aliases
+            # 1. Standardize column names from Vietnamese & English aliases (Bilingual Auto-Detection)
             alias_map = {
-                "gross_amount": ["doanh thu", "doanh_thu", "doanh số", "thành tiền", "thanh tien", "tổng tiền", "tong tien", "gross_amount", "gross_revenue", "revenue", "sales"],
-                "date": ["tháng", "thang", "ngày", "ngay", "date", "time", "thời gian", "thoi gian", "period", "kỳ"],
-                "channel": ["kênh", "kenh", "channel", "platform", "sàn", "kênh bán"],
-                "region": ["khu vực", "khu vuc", "region", "vùng", "vung", "địa bàn", "dia ban", "miền", "mien"],
-                "order_id": ["mã đơn", "ma don", "mã đơn hàng", "order_id", "order id", "mã đh", "số đơn", "order_code"],
-                "product_id": ["mã sp", "ma sp", "mã sản phẩm", "product_id", "product id", "sku", "mã hàng", "tên sp", "tên sản phẩm", "product_name"],
-                "unit_price": ["đơn giá", "don gia", "unit_price", "giá bán", "gia ban"],
-                "quantity": ["số lượng", "so luong", "quantity", "qty"],
-                "cogs": ["giá vốn", "gia von", "cogs", "cost", "tiền vốn", "chi phí vốn"],
-                "discount_amount": ["chiết khấu", "chiet khau", "voucher", "discount", "khuyến mãi", "giảm giá"],
-                "return_amount": ["hàng trả", "hang tra", "hoàn", "hoan", "return", "refund", "trả hàng", "hàng hoàn"]
+                "gross_amount": [
+                    "order_value", "order value", "order_val", "order val", "order_amount", "order amount",
+                    "order_total", "order total", "net_order_value", "net order value", "gross_revenue", 
+                    "gross revenue", "gross_amount", "gross amount", "gross_sales", "sales_value", 
+                    "sales_amount", "total_amount", "total_value", "line_total", "item_total", 
+                    "doanh thu", "doanh_thu", "doanh số", "doanh_so", "thành tiền", "thanh tien", 
+                    "tổng tiền", "tong tien", "tổng cộng", "tong cong", "giá trị đơn", "thực thu", 
+                    "revenue", "sales", "amount", "total"
+                ],
+                "date": [
+                    "order_date", "order date", "transaction_date", "trans_date", "created_date", 
+                    "created_at", "purchase_date", "date", "datetime", "tháng", "thang", "ngày", 
+                    "ngay", "thời gian", "thoi gian", "period", "kỳ"
+                ],
+                "channel": [
+                    "channel", "sales_channel", "platform", "source", "store", "outlet", 
+                    "kênh", "kenh", "kênh bán", "sàn", "san", "cửa hàng", "online", "offline"
+                ],
+                "region": [
+                    "region", "area", "location", "zone", "khu vực", "khu vuc", "vùng", "vung", 
+                    "địa bàn", "dia ban", "miền", "mien", "tỉnh", "thành phố"
+                ],
+                "order_id": [
+                    "order_id", "order id", "order_number", "order number", "order_no", "order no", 
+                    "ord_id", "transaction_id", "invoice_id", "mã đơn", "ma don", "mã đơn hàng", 
+                    "mã hóa đơn", "mã đh", "số đơn", "order_code"
+                ],
+                "product_id": [
+                    "product_id", "product id", "sku", "item_code", "item id", "product_code", 
+                    "mã sp", "ma sp", "mã sản phẩm", "masp", "mã hàng"
+                ],
+                "product_name": [
+                    "product_name", "product name", "item_name", "item name", "product_title", 
+                    "product", "item", "tên sản phẩm", "ten san pham", "tên sp", "ten sp", 
+                    "tên hàng", "sản phẩm", "san pham"
+                ],
+                "customer_id": [
+                    "customer_id", "customer id", "client_id", "client id", "buyer_id", 
+                    "user_id", "cust_id", "mã khách hàng", "ma khach hang", "khách hàng"
+                ],
+                "unit_price": [
+                    "unit_price", "unit price", "price", "selling_price", "item_price", 
+                    "đơn giá", "don gia", "giá bán", "gia ban", "giá", "gia"
+                ],
+                "quantity": [
+                    "quantity", "qty", "item_count", "units", "số lượng", "so luong", "soluong", "sl"
+                ],
+                "cogs": [
+                    "cogs", "cost_of_goods", "cost of goods", "cost_of_goods_sold", "total_cogs", 
+                    "cost", "total_cost", "unit_cogs", "giá vốn", "gia von", "tiền vốn", "chi phí vốn", "vốn"
+                ],
+                "discount_amount": [
+                    "discount_amount", "discount amount", "discount_value", "discount value", 
+                    "discount", "discounts", "promo_discount", "chiết khấu", "chiet khau", 
+                    "voucher", "khuyến mãi", "giảm giá", "tiền giảm"
+                ],
+                "return_amount": [
+                    "return_value", "return value", "return_val", "return_amount", "return amount", 
+                    "refund_amount", "refund amount", "refund_value", "returned_amount", "returns", 
+                    "refund", "hàng trả", "hang tra", "hoàn", "hoan", "trả hàng", "hàng hoàn", "tiền hoàn trả"
+                ],
+                "campaign_id": [
+                    "campaign_list", "campaign list", "campaign_id", "campaign id", "campaign_name", 
+                    "campaign_code", "campaign", "campaigns", "marketing_campaign", "chiến dịch", 
+                    "chien dich", "mã chương trình", "chương trình"
+                ],
+                "status": [
+                    "old_report_status", "order_status", "status", "state", "trạng thái", "tình trạng"
+                ]
             }
             
             detected_fields = {}
@@ -562,16 +620,16 @@ class ReconciliationSkill:
             order_id = str(get_safe_scalar(row, "order_id", f"ORD_{idx+1:03d}"))
             camp_raw = get_safe_scalar(row, "campaign_id", None)
             if camp_raw is None or (isinstance(camp_raw, (int, float)) and pd.isna(camp_raw)) or str(camp_raw).strip() in ["", "nan", "None"]:
-                camp_raw = get_safe_scalar(row, "tx_campaign_id", None)
+                camp_raw = get_safe_scalar(row, "tx_campaign_id", None) or get_safe_scalar(row, "campaign_list", None) or get_safe_scalar(row, "Campaign_List", None)
             campaigns = camp_raw
 
-            gross = float(get_safe_scalar(row, "gross_amount", 0) or 0)
-            return_amt = float(get_safe_scalar(row, "return_amount", 0) or 0)
-            total_cogs = float(get_safe_scalar(row, "total_cogs", 0) or 0)
+            gross = float(get_safe_scalar(row, "gross_amount", 0) or get_safe_scalar(row, "order_value", 0) or get_safe_scalar(row, "Order_Value", 0) or 0)
+            return_amt = float(get_safe_scalar(row, "return_amount", 0) or get_safe_scalar(row, "return_value", 0) or get_safe_scalar(row, "Return_Value", 0) or 0)
+            total_cogs = float(get_safe_scalar(row, "total_cogs", 0) or get_safe_scalar(row, "cogs", 0) or get_safe_scalar(row, "COGS", 0) or 0)
 
             discount_raw = get_safe_scalar(row, "discount_amount", None)
             if discount_raw is None or (isinstance(discount_raw, (int, float)) and pd.isna(discount_raw)):
-                discount_raw = get_safe_scalar(row, "tx_discount_amount", 0)
+                discount_raw = get_safe_scalar(row, "tx_discount_amount", 0) or get_safe_scalar(row, "Discount_Amount", 0)
             discount_val = float(discount_raw or 0)
 
             # Normalize campaigns into a list of strings

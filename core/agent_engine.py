@@ -497,6 +497,17 @@ class SalesEvaluationAgent:
 
             p_grp = df_attr.groupby("product_id")
             for pid, grp in p_grp:
+                real_pname = None
+                if "product_name" in grp.columns:
+                    valid_names = [str(x).strip() for x in grp["product_name"].dropna() if str(x).strip() and str(x).lower() not in ["none", "nan", ""]]
+                    if valid_names:
+                        real_pname = valid_names[0]
+                elif "Product_Name" in grp.columns:
+                    valid_names = [str(x).strip() for x in grp["Product_Name"].dropna() if str(x).strip() and str(x).lower() not in ["none", "nan", ""]]
+                    if valid_names:
+                        real_pname = valid_names[0]
+
+                disp_pname = real_pname or cogs_map.get(str(pid), f"Sản phẩm {pid}")
                 p_qty = float(grp["quantity"].sum()) if "quantity" in grp.columns else len(grp)
                 p_gross = float(grp["attributed_gross"].sum()) if "attributed_gross" in grp.columns else 0.0
                 p_disc = float(grp["attributed_discount"].sum()) if "attributed_discount" in grp.columns else 0.0
@@ -505,7 +516,7 @@ class SalesEvaluationAgent:
                 p_gp = p_net - p_cogs
                 product_breakdown.append({
                     "product_id": str(pid),
-                    "product_name": cogs_map.get(str(pid), f"Sản phẩm {pid}"),
+                    "product_name": disp_pname,
                     "quantity_sold": p_qty,
                     "gross_revenue": p_gross,
                     "discount_amount": p_disc,

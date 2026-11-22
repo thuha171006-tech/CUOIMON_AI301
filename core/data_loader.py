@@ -14,94 +14,121 @@ import urllib.parse
 import pandas as pd
 import numpy as np
 
-# Column Aliases Mapping for robust ingestion
+# Column Aliases Mapping for robust ingestion (English & Vietnamese Bilingual)
 COLUMN_MAPPINGS = {
     # Transactions table
     "order_id": [
-        "order_id", "mã đơn hàng", "ma don hang", "mã hóa đơn", "ma hoa don", 
-        "số hóa đơn", "so hoa don", "mã giao dịch", "ma giao dich", "giao dịch", "giao dich",
-        "mã đh", "ma dh", "madon", "order id", "ma_don", "mã đơn", "ma don", 
-        "order", "invoice", "id_don_hang", "id_don", "id", "code"
+        "order_id", "order id", "order_number", "order number", "order_no", "order no",
+        "ord_id", "ord_no", "transaction_id", "transaction id", "trans_id", "trans id",
+        "invoice_id", "invoice_no", "invoice no", "mã đơn hàng", "ma don hang", "mã hóa đơn", 
+        "ma hoa don", "số hóa đơn", "so hoa don", "mã giao dịch", "ma giao dich", "giao dịch", 
+        "giao dich", "mã đh", "ma dh", "madon", "ma_don", "mã đơn", "ma don", "order", "invoice", 
+        "id_don_hang", "id_don", "id", "code"
+    ],
+    "customer_id": [
+        "customer_id", "customer id", "client_id", "client id", "buyer_id", "buyer id",
+        "user_id", "user id", "cust_id", "mã khách hàng", "ma khach hang", "mã khách", 
+        "ma khach", "khách hàng", "khach hang"
     ],
     "date": [
-        "date", "ngày", "ngay giao dich", "ngay", "created_date", "order_date", 
-        "ngày đặt", "ngay dat", "ngày lập", "ngay lap", "thời gian", "thoi gian", 
-        "ngay_tao", "thời điểm", "thoi diem"
+        "order_date", "order date", "transaction_date", "transaction date", "trans_date", 
+        "created_date", "created_at", "purchase_date", "date", "datetime", "timestamp",
+        "ngày", "ngay giao dich", "ngay", "ngày đặt", "ngay dat", "ngày lập", "ngay lap", 
+        "thời gian", "thoi gian", "tháng", "thang", "ngay_tao", "thời điểm", "thoi diem", "period"
     ],
     "channel": [
-        "channel", "kênh", "kenh", "kênh bán", "kenh ban", "sàn", "san", 
-        "nền tảng", "nen tang", "chi nhánh", "chi nhanh", "cửa hàng", "cua hang", "platform", "store"
+        "channel", "sales_channel", "sales channel", "platform", "source", "medium", 
+        "store", "outlet", "kênh", "kenh", "kênh bán", "kenh ban", "sàn", "san", 
+        "nền tảng", "nen tang", "chi nhánh", "chi nhanh", "cửa hàng", "cua hang", "online", "offline"
     ],
     "region": [
-        "region", "khu vực", "khu vuc", "vùng", "vung", "miền", "mien", 
-        "địa bàn", "dia ban", "khu_vuc", "tỉnh", "tinh", "thành phố", "thanh pho", "location", "area"
+        "region", "area", "location", "zone", "province", "city", "khu vực", "khu vuc", 
+        "vùng", "vung", "miền", "mien", "địa bàn", "dia ban", "khu_vuc", "tỉnh", "tinh", "thành phố", "thanh pho"
     ],
     "product_id": [
-        "product_id", "mã sản phẩm", "ma san pham", "masp", "item_code", "sku", 
-        "mã hàng", "ma hang", "product id", "mặt hàng", "mat hang", "hàng hóa", "hang hoa", 
-        "tên sản phẩm", "ten san pham", "tên sp", "ten sp", "tên hàng", "ten hang", 
-        "sản phẩm", "san pham", "item", "product"
+        "product_id", "product id", "sku", "item_code", "item id", "product_code", 
+        "product code", "barcode", "mã sản phẩm", "ma san pham", "masp", "mã hàng", "ma hang", 
+        "product id", "mặt hàng", "mat hang", "hàng hóa", "hang hoa"
+    ],
+    "product_name": [
+        "product_name", "product name", "item_name", "item name", "product_title", 
+        "item_title", "product_desc", "product", "item", "tên sản phẩm", "ten san pham", 
+        "tên hàng", "ten hang", "tên sp", "ten sp", "san pham", "sản phẩm", "tên mặt hàng", "ten mat hang"
     ],
     "quantity": [
-        "quantity", "số lượng", "so luong", "qty", "soluong", "sl", "số lượng mua", "so luong mua"
+        "quantity", "qty", "item_count", "units", "volume", "number_of_items",
+        "số lượng", "so luong", "soluong", "sl", "số lượng mua", "so luong mua"
     ],
     "unit_price": [
-        "unit_price", "đơn giá", "don gia", "giá bán", "price", "giá", "gia", 
-        "gia_ban", "unit price", "đơn giá bán", "don gia ban"
+        "unit_price", "unit price", "price", "selling_price", "item_price", "unit_rate", 
+        "retail_price", "đơn giá", "don gia", "giá bán", "gia ban", "giá", "gia", "đơn giá bán", "don gia ban"
     ],
     "gross_amount": [
-        "gross_amount", "thành tiền", "thanh tien", "thành_tiền", "thanh_tien", 
+        "order_value", "order value", "order_val", "order val", "order_amount", "order amount",
+        "order_total", "order total", "net_order_value", "net order value", "gross_revenue", 
+        "gross revenue", "gross_amount", "gross amount", "gross_sales", "gross sales", "sales_value", 
+        "sales value", "sales_amount", "sales amount", "total_amount", "total amount", "total_value", 
+        "total value", "line_total", "line total", "item_total", "item total", "revenue", "sales", 
+        "gmv", "amount", "total", "thành tiền", "thanh tien", "thành_tiền", "thanh_tien", 
         "doanh thu", "doanh_thu", "doanh số", "doanh_so", "tổng tiền", "tong tien", 
         "tổng_tiền", "tong_tien", "tổng cộng", "tong cong", "tổng_cộng", "tong_cong", 
         "tiền hàng", "tien hang", "thanh toán", "thanh toan", "thanh_toán", 
-        "giá trị đơn", "gia tri don", "giá trị đơn hàng", "giá trị giao dịch", "thực thu", "thuc thu", 
-        "revenue", "gross revenue", "total amount", "total", "amount", "sales"
+        "giá trị đơn", "gia tri don", "giá trị đơn hàng", "giá trị giao dịch", "thực thu", "thuc thu"
     ],
     "status": [
-        "status", "trạng thái", "trang thai", "tình trạng", "tinh trang", "kết quả", "ket qua"
+        "old_report_status", "order_status", "delivery_status", "return_status", "status", "state",
+        "trạng thái", "trang thai", "tình trạng", "tinh trang", "kết quả", "ket qua"
     ],
     "return_date": [
-        "return_date", "ngày trả", "ngay tra", "ngay_doi_tra", "ngày đổi trả", "ngày hoàn", "ngay hoan"
+        "return_date", "return date", "refund_date", "ngày trả", "ngay tra", 
+        "ngay_doi_tra", "ngày đổi trả", "ngày hoàn", "ngay hoan"
     ],
     "return_amount": [
-        "return_amount", "tiền hoàn trả", "tien tra", "giá trị hoàn", "refund_amount", 
-        "tiền hoàn", "hoàn tiền", "hoan tien", "hàng trả", "hang tra", "tiền trả lại", "tien tra lai"
+        "return_value", "return value", "return_val", "return val", "return_amount", "return amount", 
+        "refund_amount", "refund amount", "refund_value", "refund value", "returned_amount", "returned_value",
+        "cogs_recovered", "damaged_restock_loss", "tiền hoàn trả", "tien tra", "giá trị hoàn", 
+        "refund_amount", "tiền hoàn", "hoàn tiền", "hoan tien", "hàng trả", "hang tra", 
+        "tiền trả lại", "tien tra lai", "trả hàng", "tra hang", "hàng hoàn", "hang hoan"
     ],
 
     # Promotions table
     "promo_code": [
-        "promo_code", "mã ưu đãi", "ma uu dai", "mã giảm giá", "voucher", "coupon", 
-        "mã voucher", "ma voucher", "khuyến mãi", "khuyen mai"
+        "promo_code", "promo code", "voucher_code", "voucher code", "coupon_code", 
+        "coupon", "voucher", "mã ưu đãi", "ma uu dai", "mã giảm giá", "mã voucher", "ma voucher", 
+        "khuyến mãi", "khuyen mai"
     ],
     "campaign_id": [
-        "campaign_id", "mã chương trình", "ma chuong trinh", "chiến dịch", "chien dich", 
-        "campaign", "chương trình", "chuong trinh", "ct", "ctkm"
+        "campaign_list", "campaign list", "campaign_id", "campaign id", "campaign_name", 
+        "campaign name", "campaign_code", "campaign code", "marketing_campaign", "campaign", 
+        "campaigns", "mã chương trình", "ma chuong trinh", "chiến dịch", "chien dich", 
+        "chương trình", "chuong trinh", "ct", "ctkm"
     ],
     "discount_amount": [
-        "discount_amount", "tiền giảm", "mức giảm", "chiet khau", "chiết khấu", 
-        "discount", "tiền voucher", "tien giam", "giảm giá", "giam gia", "giảm", "giam"
+        "discount_amount", "discount amount", "discount_value", "discount value", "discount_val",
+        "discount", "discounts", "promo_discount", "voucher_discount", "coupon_discount",
+        "tiền giảm", "mức giảm", "chiet khau", "chiết khấu", "tiền voucher", "tien giam", 
+        "giảm giá", "giam gia", "giảm", "giam"
     ],
 
     # Products & COGS table
-    "product_name": [
-        "product_name", "tên sản phẩm", "ten san pham", "tên hàng", "tên sp", "ten sp", 
-        "san pham", "sản phẩm", "tên mặt hàng", "ten mat hang"
-    ],
     "category": [
-        "category", "ngành hàng", "nganh hang", "danh mục", "danh muc", "nhóm hàng", "nhom hang"
+        "category", "category_name", "department", "product_category", "ngành hàng", 
+        "nganh hang", "danh mục", "danh muc", "nhóm hàng", "nhom hang"
     ],
-    "list_price": ["list_price", "giá niêm yết", "gia niem yet", "giá bán gốc", "giá gốc"],
+    "list_price": ["list_price", "list price", "original_price", "giá niêm yết", "gia niem yet", "giá bán gốc", "giá gốc"],
     "cogs": [
-        "cogs", "giá vốn", "gia von", "tiền vốn", "tien von", "chi phí vốn", 
-        "cost_of_goods", "vốn", "von", "giá nhập", "gia nhap", "chi phí giá vốn", "cost"
+        "cogs", "cost_of_goods", "cost of goods", "cost_of_goods_sold", "cost of goods sold",
+        "total_cogs", "total cogs", "cost", "total_cost", "unit_cogs", "product_cost", "item_cost",
+        "purchase_cost", "cost_price", "giá vốn", "gia von", "tiền vốn", "tien von", "chi phí vốn", 
+        "vốn", "von", "giá nhập", "gia nhap", "chi phí giá vốn"
     ],
 
     # Campaign Costs table
-    "cost_id": ["cost_id", "mã chi phí", "ma chi phi", "id_chi_phi"],
-    "cost_type": ["cost_type", "loại chi phí", "loai chi phi", "phân loại chi phí"],
-    "description": ["description", "mô tả", "mo ta", "nội dung chi"],
-    "amount": ["amount", "số tiền", "so tien", "chi phí", "cost_amount", "tiền chi"],
-    "allocation_rule": ["allocation_rule", "tiêu thức phân bổ", "tieu thuc", "quy tắc phân bổ"]
+    "cost_id": ["cost_id", "cost id", "mã chi phí", "ma chi phi", "id_chi_phi"],
+    "cost_type": ["cost_type", "cost type", "loại chi phí", "loai chi phi", "phân loại chi phí"],
+    "description": ["description", "mô tả", "mo ta", "nội dung chi", "note", "ghi chú"],
+    "amount": ["amount", "cost_amount", "cost amount", "số tiền", "so tien", "chi phí", "tiền chi"],
+    "allocation_rule": ["allocation_rule", "allocation rule", "tiêu thức phân bổ", "tieu thuc", "quy tắc phân bổ"]
 }
 
 def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
